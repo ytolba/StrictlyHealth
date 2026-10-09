@@ -24,6 +24,7 @@ enum DashboardDemo {
             let hrv = hr.enumerated().map { index, point in PersonalPoint(time: point.time, value: 62 + sin(Double(index) / 5) * 9) }
             let night = PersonalNight(start: start, end: cursor, source: .ring, identity: "direct-ring:demo", hours: asleepHours, restorativeHours: 205.0 / 60, stages: stages, heartRate: hr, hrvSeries: hrv, hrvMethod: "RMSSD", bedStart: start, bedEnd: cursor, provenance: "Direct ring · Bluetooth · synthetic fixture")
             var day = PersonalDay(date: date, night: night)
+            day.directRingNight = night
             for metric in PersonalMetric.allCases {
                 if let value = night.value(metric) { day.values[metric.rawValue] = PersonalValue(value: value, source: .ring, identity: night.identity) }
             }
@@ -37,6 +38,20 @@ enum DashboardDemo {
             day.values[PersonalMetric.temperatureDeviation.rawValue] = PersonalValue(value: 0.3, source: .ring, identity: night.identity)
             day.values[PersonalMetric.sleepScore.rawValue] = PersonalValue(value: 86, source: .ring, identity: "oura-account-export:demo")
             day.values[PersonalMetric.activityScore.rawValue] = PersonalValue(value: 91, source: .ring, identity: "oura-account-export:demo")
+            #if DEBUG
+            let args = ProcessInfo.processInfo.arguments
+            if args.contains("--demo-missing-ring-sleep") || args.contains("--demo-watch-sleep") {
+                // Model a pre-update cache with a valid Watch night, but no ring night.
+                day.directRingNight = nil
+                day.night?.source = .watch
+                day.night?.identity = "apple-health:demo-watch"
+                day.night?.provenance = "Apple Watch · Apple Health · synthetic fixture"
+            } else if args.contains("--demo-partial-ring-sleep") {
+                day.night?.hours = nil
+                day.night?.stages = []
+                day.directRingNight = day.night
+            }
+            #endif
             return day
         }
     }

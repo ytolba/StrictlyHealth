@@ -207,6 +207,8 @@ struct PersonalDay: Codable, Identifiable {
     // Optional for old-cache compatibility; preserves partial live nights when an
     // archive supplies a complete historical night for the same calendar day.
     var liveNight: PersonalNight? = nil
+    var directRingNight: PersonalNight? = nil
+    var sleepInput: PersonalSleepInput? = nil
     var workouts: [PersonalWorkout] = []
     var archiveRecords: [PersonalArchiveRecord]? = nil
     var id: Date { date }
@@ -222,11 +224,19 @@ struct PersonalDay: Codable, Identifiable {
 }
 struct PersonalPreferences: Codable, Equatable {
     var priorities: [String: PersonalSource] = [:]
+    var sleepInput: PersonalSleepInput? = nil
     var rhrWeight = 0.3
     var hrvWeight = 0.3
     var sleepWeight = 0.3
     var stagesWeight = 0.1
-    func source(_ metric: PersonalMetric) -> PersonalSource { priorities[metric.rawValue] ?? metric.defaultSource }
+    var resolvedSleepInput: PersonalSleepInput {
+        // Keep an explicitly selected Watch preference from an older install.
+        sleepInput ?? (priorities[PersonalMetric.sleep.rawValue] == .watch ? .watch : .directRing)
+    }
+    func source(_ metric: PersonalMetric) -> PersonalSource {
+        if metric == .sleep, resolvedSleepInput != .automatic { return resolvedSleepInput == .watch ? .watch : .ring }
+        return priorities[metric.rawValue] ?? metric.defaultSource
+    }
     static func load() -> Self {
         guard let data = UserDefaults.standard.data(forKey: "personal.preferences"),
               let value = try? JSONDecoder().decode(Self.self, from: data) else { return Self() }

@@ -23,8 +23,9 @@ enum PersonalAssembler {
             let rn = ringNight.flatMap { makeRingNight($0, identity: directID) }
             let hn = healthNight(samples: sleep, wakeDate: date)
             let preferred = preferences.source(.sleep)
-            let completeRing = rn.flatMap { $0.hours == nil ? nil : $0 }
-            day.night = preferred == .ring ? (completeRing ?? hn[.ring] ?? hn[.watch] ?? rn) : (hn[.watch] ?? completeRing ?? hn[.ring] ?? rn)
+            day.directRingNight = rn
+            day.sleepInput = preferences.resolvedSleepInput
+            day.night = PersonalSleepSelection.choose(direct: rn, health: hn, input: preferences.resolvedSleepInput, preferred: preferred)
             if let night = day.night, let hours = night.hours {
                 day.values[PersonalMetric.sleep.rawValue] = PersonalValue(value: hours, source: night.source, identity: night.identity, method: "sleep-duration")
             }
@@ -204,7 +205,7 @@ enum PersonalAssembler {
             result[source] = PersonalNight(start: start, end: end, source: source, identity: chosen,
                 hours: unionHours(session.map { (max(start, $0.startDate), min(end, $0.endDate)) }),
                 restorativeHours: restorative.isEmpty ? nil : unionHours(restorative.map { (max(start, $0.startDate), min(end, $0.endDate)) }),
-                stages: stages, heartRate: [], bedStart: bed.map(\.startDate).min(), bedEnd: bed.map(\.endDate).max(), provenance: "Apple Health · one source/device sleep session")
+                stages: stages, heartRate: [], bedStart: bed.map(\.startDate).min(), bedEnd: bed.map(\.endDate).max(), provenance: source == .watch ? "Apple Watch · Apple Health · one device sleep session" : "Oura app · Apple Health · not direct Bluetooth")
         }
         return result
     }

@@ -16,7 +16,7 @@ An iPhone app with ring battery/connection status, manual history sync, daily sl
 Today is sleep-first, opening separate Sleep, Activity and Recovery pages. Technical explanations remain available through disclosures rather than repeated subtitles.
 
 ## Capabilities and Constraints
-Use available ring measurements with Apple Health fallback. Calculate transparent app-owned Sleep and Activity scores; keep them distinct from proprietary Oura scores and medical assessments. Never manufacture missing sleep stages, oxygen, HRV or activity. Direct ring steps are currently estimates and must be labeled. Preserve pairing and stored history. Ring generation support depends on verified protocol capabilities, not a blanket compatibility claim.
+Use direct Bluetooth Oura sleep by default, without silent Apple Health substitution. Watch-only sleep and automatic sleep fallback are explicit options; other measurements retain preferred-source fallback. Calculate transparent app-owned Sleep and Activity scores; keep them distinct from proprietary Oura scores and medical assessments. Never manufacture missing sleep stages, oxygen, HRV or activity. Direct ring steps are currently estimates and must be labeled. Preserve pairing and stored history. Ring generation support depends on verified protocol capabilities, not a blanket compatibility claim.
 
 ## Brand Commitments
 User requested an Oura-influenced native experience with an independent twist, rich data charts, colored scores and Apple Health integration. Preserve familiar iPhone navigation and accessibility.

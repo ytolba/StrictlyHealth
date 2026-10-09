@@ -52,6 +52,13 @@ for essentials, stages, awakenings, continuity, weekly rhythm and physiology.
 Missing or incomplete stages stay unavailable. Firmware determines which metrics
 the ring supplies; this project does not promise every official Oura metric.
 
+In **Settings → Preferred source → Sleep source**, choose **Oura · direct Bluetooth**
+for ring-only sleep. It never substitutes Apple Health sleep when ring data is missing
+or incomplete. **Apple Watch · Apple Health** reads Watch sleep only; **Automatic
+fallback** explicitly enables source fallback. Older installations retain an explicitly
+selected Watch preference; otherwise they use direct Oura. Today and Sleep show the
+actual source and transport. A successful sync alone does not prove a complete night.
+
 Skin temperature is shown in °F. Raw storage remains Celsius. A temperature
 deviation is converted as a difference (×1.8), not an absolute temperature.
 Read [the formulas](SLEEP.md) for coverage requirements and interpretation.

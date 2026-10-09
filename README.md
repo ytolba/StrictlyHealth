@@ -11,6 +11,7 @@ Oura API subscription, proprietary model download or bundled health database.
 - Battery and supported ring history over Bluetooth with your own key.
 - Oura and Apple Watch measurements without double-counting activity or mixing HRV methods.
 - Actual sleep stages, sleep/wake times, deep/REM/core durations, recorded awakenings and overnight physiology when available.
+- Direct Bluetooth Oura sleep by default, with no silent Apple Health fallback. Today and Sleep name the actual source; Apple Watch sleep and automatic fallback are explicit Settings choices.
 - Time in bed, sleep efficiency and time to fall asleep, plus longest recorded sleep stretch, sleep-window midpoint and seven-night bedtime consistency. Calculations use recorded intervals—not guessed sleep stages.
 - Fahrenheit skin-temperature readouts and temperature differences; original Celsius records stay intact.
 - Local Oura account export import for historical scores, contributors, sessions, stress/resilience and other dated fields.

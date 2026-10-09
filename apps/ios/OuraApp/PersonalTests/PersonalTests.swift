@@ -3,6 +3,74 @@ import SwiftData
 @testable import OuraApp
 
 final class PersonalTests: XCTestCase {
+    func testDefaultSleepModeIsStrictDirectOura() {
+        XCTAssertEqual(PersonalPreferences().resolvedSleepInput, .directRing)
+        XCTAssertNil(PersonalSleepSelection.choose(direct: nil, health: [.watch: insightNight(), .ring: insightNight()], input: .directRing, preferred: .ring))
+    }
+    func testPartialDirectSleepIsNotReplacedByCompleteHealthSleep() {
+        var direct = insightNight(); direct.hours = nil; direct.stages = []
+        var watch = insightNight(); watch.source = .watch; watch.identity = "apple-health:watch"
+        let chosen = PersonalSleepSelection.choose(direct: direct, health: [.watch: watch], input: .directRing, preferred: .ring)
+        XCTAssertEqual(chosen?.identity, direct.identity)
+        XCTAssertNil(chosen?.hours)
+    }
+    func testSleepFallbackRequiresExplicitAutomaticMode() {
+        var watch = insightNight(); watch.source = .watch; watch.identity = "apple-health:watch"
+        XCTAssertEqual(PersonalSleepSelection.choose(direct: nil, health: [.watch: watch], input: .automatic, preferred: .ring)?.identity, watch.identity)
+        XCTAssertNil(PersonalSleepSelection.choose(direct: insightNight(), health: [:], input: .watch, preferred: .watch))
+    }
+    func testDirectModeRejectsHealthOrArchiveNightMasqueradingAsDirect() {
+        for identity in ["apple-health:oura", "oura-account-export:test"] {
+            var invalid = insightNight(); invalid.identity = identity
+            XCTAssertNil(PersonalSleepSelection.choose(direct: invalid, health: [:], input: .directRing, preferred: .ring))
+            let day = PersonalDay(date: today, night: invalid, directRingNight: invalid)
+            XCTAssertNil(day.enforcingSleepInput(.directRing).night)
+        }
+    }
+    func testCachedWatchSleepIsRemovedWithoutRemovingWatchActivity() {
+        var watch = insightNight(); watch.source = .watch; watch.identity = "apple-health:watch"
+        var day = PersonalDay(date: today, night: watch)
+        day.values[PersonalMetric.sleep.rawValue] = PersonalValue(value: 5, source: .watch, identity: watch.identity)
+        day.values[PersonalMetric.steps.rawValue] = PersonalValue(value: 1234, source: .watch, identity: watch.identity)
+        let live = PersonalLiveSnapshot.build([day], preferences: PersonalPreferences(), goals: PersonalGoals())
+        XCTAssertNil(live.days.first?.night)
+        XCTAssertNil(live.days.first?.value(.sleep))
+        XCTAssertEqual(live.days.first?.value(.steps)?.value, 1234)
+        XCTAssertNil(live.scores[today]?.sleep.score)
+        XCTAssertEqual(day.night?.identity, watch.identity) // original historical cache is intact
+    }
+    func testCachedDirectNightIsRestoredInsteadOfWatchFallback() {
+        var watch = insightNight(); watch.source = .watch; watch.identity = "apple-health:watch"; watch.hours = 9
+        let direct = insightNight()
+        let original = PersonalDay(date: today, night: watch, directRingNight: direct)
+        let filtered = original.enforcingSleepInput(.directRing)
+        XCTAssertEqual(filtered.night?.identity, direct.identity)
+        XCTAssertEqual(filtered.value(.sleep)?.value, 5)
+        XCTAssertEqual(filtered.value(.deepSleep)?.identity, direct.identity)
+        XCTAssertEqual(original.night?.hours, 9)
+    }
+    func testSleepSourceLabelsDistinguishTransportAndArchives() {
+        var night = insightNight()
+        XCTAssertEqual(night.sleepSourceTitle, "Oura · Bluetooth")
+        night.identity = "apple-health:oura"
+        XCTAssertEqual(night.sleepSourceTitle, "Oura · Apple Health")
+        night.source = .watch
+        XCTAssertEqual(night.sleepSourceTitle, "Apple Watch · Apple Health")
+        night.identity = "oura-account-export:test"
+        XCTAssertEqual(night.sleepSourceTitle, "Oura export · Historical")
+    }
+    func testOldPreferenceAndDayJSONRemainCompatible() throws {
+        var preferences = PersonalPreferences()
+        preferences.priorities[PersonalMetric.sleep.rawValue] = .watch
+        let oldPreferences = try JSONEncoder().encode(preferences)
+        XCTAssertEqual(try JSONDecoder().decode(PersonalPreferences.self, from: oldPreferences).resolvedSleepInput, .watch)
+        preferences.sleepInput = .directRing
+        XCTAssertEqual(try JSONDecoder().decode(PersonalPreferences.self, from: JSONEncoder().encode(preferences)).resolvedSleepInput, .directRing)
+        let oldDay = PersonalDay(date: today, night: insightNight())
+        let decoded = try JSONDecoder().decode(PersonalDay.self, from: JSONEncoder().encode(oldDay))
+        XCTAssertNil(decoded.directRingNight)
+        XCTAssertEqual(decoded.enforcingSleepInput(.directRing).night?.identity, oldDay.night?.identity)
+    }
     private func insightNight() -> PersonalNight {
         let t = today
         let labels = ["Awake", "Core", "Deep", "REM", "Awake", "Core", "Core", "Awake"]

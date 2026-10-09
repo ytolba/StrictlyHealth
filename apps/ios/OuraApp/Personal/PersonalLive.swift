@@ -149,7 +149,7 @@ struct PersonalLiveSnapshot {
     var scores: [Date: PersonalDailyScores] = [:]
     var nights: [Date: PersonalNightCharts] = [:]
     static func build(_ stored: [PersonalDay], preferences: PersonalPreferences, goals: PersonalGoals) -> Self {
-        let days = stored.map(\.liveOnly).filter { !$0.values.isEmpty || $0.night != nil || !$0.workouts.isEmpty }.sorted { $0.date < $1.date }
+        let days = stored.map { $0.liveOnly.enforcingSleepInput(preferences.resolvedSleepInput) }.filter { !$0.values.isEmpty || $0.night != nil || !$0.workouts.isEmpty }.sorted { $0.date < $1.date }
         var result = Self(days: days)
         for day in days {
             result.byDate[day.date] = day

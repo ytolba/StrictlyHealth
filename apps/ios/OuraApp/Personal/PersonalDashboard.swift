@@ -31,6 +31,10 @@ import UniformTypeIdentifiers
         let container = context.container
         cache = await Task.detached(priority: .utility) { PersonalCacheWorker(modelContainer: container) }.value
         if isDemo {
+            preferences = PersonalPreferences()
+            #if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("--demo-watch-sleep") { preferences.sleepInput = .watch }
+            #endif
             days = DashboardDemo.days()
             await prepareLive()
             status = "Demo · synthetic data. No HealthKit or ring connection; demo records are never saved."
@@ -106,6 +110,7 @@ import UniformTypeIdentifiers
         } catch { status = "Refresh failed; cached data retained. \(error.localizedDescription)" }
     }
     func savePreferences() {
+        Task { await prepareLive() }
         guard !isDemo else { return }
         preferences.save()
         scheduleRefresh()
@@ -192,6 +197,9 @@ struct PersonalDashboard: View {
             #endif
             await model.start(context: context)
             starting = false
+            #if DEBUG
+            if model.isDemo && ProcessInfo.processInfo.arguments.contains("--preview-sleep-settings") { tab = 3 }
+            #endif
             await refreshForeground()
         }
         .onChange(of: scenePhase) { _, phase in
@@ -293,8 +301,15 @@ struct PersonalSleepDetail: View {
 struct PersonalSettings: View {
     @ObservedObject var model: PersonalDashboardModel
     @State private var importing = false
+    @Environment(\.dynamicTypeSize) private var textSize
+    private var sleepPicker: some View {
+        Picker("Sleep source", selection: Binding(get: { model.preferences.resolvedSleepInput }, set: { model.preferences.sleepInput = $0; model.savePreferences() })) {
+            ForEach(PersonalSleepInput.allCases) { Text($0.rawValue).fixedSize(horizontal: false, vertical: true).tag($0) }
+        }.tint(.primary)
+    }
     var body: some View {
         NavigationStack {
+            ScrollViewReader { scroll in
             Form {
                 Section("Apple Health") {
                     Button("Connect or review Apple Health access") { Task { await model.connectHealth() } }.disabled(model.refreshing || model.isDemo)
@@ -314,14 +329,17 @@ struct PersonalSettings: View {
                     if !model.importStatus.isEmpty { Text(model.importStatus).font(.footnote) }
                 }
                 Section("Preferred source") {
-                    ForEach([PersonalMetric.sleep, .restingHR, .hrv, .steps, .energy, .respiratoryRate, .oxygen, .skinTemperature]) { metric in
+                    if textSize.isAccessibilitySize { sleepPicker.pickerStyle(.inline) }
+                    else { sleepPicker }
+                    Text("Direct Oura uses only Bluetooth ring records, never Apple Health sleep. Missing or incomplete ring stages remain unavailable. Automatic fallback is opt-in.").font(.footnote)
+                    ForEach([PersonalMetric.restingHR, .hrv, .steps, .energy, .respiratoryRate, .oxygen, .skinTemperature]) { metric in
                         Picker(metric.title, selection: Binding(get: { model.preferences.source(metric) }, set: { model.preferences.priorities[metric.rawValue] = $0; model.savePreferences() })) {
                             ForEach(PersonalSource.allCases) { Text($0.rawValue).tag($0) }
                         }
                     }
-                    Text("Each metric uses one source, with the other as fallback. Sleep stages are never combined across sources. Workouts use Apple Watch in this model-free build.").font(.footnote)
+                    Text("Other measurements use one preferred source with fallback. Sleep follows the explicit mode above; stages are never combined across sources. Workouts use Apple Watch.").font(.footnote)
                     Text("Sleep-detail metrics follow the selected sleep source. Official Oura scores only come from an imported Oura export.").font(.footnote)
-                }
+                }.id("sleep-source-settings")
                 Section("Recovery weights") {
                     weight("Resting heart rate", path: \.rhrWeight)
                     weight("HRV", path: \.hrvWeight)
@@ -334,6 +352,14 @@ struct PersonalSettings: View {
                     Text("Device backups may include local health files. Diagnostics and manual exports can contain health data.").font(.footnote).foregroundStyle(.secondary)
                 }
             }.navigationTitle("Settings")
+                .task {
+                    #if DEBUG
+                    if model.isDemo && ProcessInfo.processInfo.arguments.contains("--preview-sleep-settings") {
+                        scroll.scrollTo("sleep-source-settings", anchor: .top)
+                    }
+                    #endif
+                }
+            }
                 .fileImporter(isPresented: $importing, allowedContentTypes: [.folder, .commaSeparatedText, .json, .plainText], allowsMultipleSelection: true) { result in
                     switch result {
                     case .success(let urls): Task { await model.importArchive(urls) }

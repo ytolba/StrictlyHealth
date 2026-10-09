@@ -4,6 +4,13 @@ These are descriptive calculations, not medical assessments or Oura algorithms.
 Download the recorded night with Ring → Sync ring. Account exports are optional
 historical backfill and never become live app scores or weekly live insights.
 
+The default sleep mode is **Oura · direct Bluetooth**: missing or incomplete direct
+ring records stay unavailable, even if Apple Health has a complete night. Watch-only
+sleep and automatic fallback are explicit options in Settings. The source shown on
+Today and Sleep distinguishes direct Bluetooth, Apple Watch via Apple Health, Oura
+app records via Apple Health, and historical account exports. Stage timelines are
+never combined across those sources. Sync completion is not proof of complete stages.
+
 | Readout | Calculation and limits |
 | --- | --- |
 | Time in bed | Recorded bed end minus recorded bed start. Without a known bed window, unavailable. |

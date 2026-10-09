@@ -30,11 +30,13 @@ struct PersonalSleepReport: View {
         List {
             if ProcessInfo.processInfo.arguments.contains("--demo-dashboard") { Section { Label("Demo · synthetic data", systemImage: "testtube.2").font(.caption) } }
             Section {
+                LabeledContent("Sleep source", value: day.sleepSourceTitle).font(.subheadline).foregroundStyle(.primary)
                 if let summary {
                     NavigationLink { PersonalLiveScoreDetail(kind: .sleep, day: day, scores: summary) } label: { header(score: result.score) }
                         .accessibilityHint("Opens the sleep score breakdown")
                 } else { header(score: result.score) }
                 if let night = day.night {
+                    if night.isDirectRing && night.hours == nil { Text("Oura records received; sleep stages are missing or incomplete.").font(.subheadline) }
                     VStack(alignment: .leading, spacing: 8) {
                         Text(PersonalChartStyle.duration(night.hours)).font(.largeTitle.weight(.semibold)).monospacedDigit()
                         Text("\(night.asleepStart.map { $0.formatted(date: .omitted, time: .shortened) } ?? "Onset unknown") → \(night.asleepEnd.map { $0.formatted(date: .omitted, time: .shortened) } ?? "Wake unknown")").font(.subheadline).monospacedDigit()
@@ -44,7 +46,7 @@ struct PersonalSleepReport: View {
                     else if !night.stages.isEmpty { PersonalStageChart(night: night, stages: night.chartStages) }
                     else { Text("Sleep stages unavailable").foregroundStyle(.secondary) }
                     Text(PersonalDisplay.sleepStory(night, goal: goals.sleepHours)).font(.subheadline).foregroundStyle(.secondary)
-                } else { Text("No sleep session for this day. Sync your ring or connect Apple Health.").foregroundStyle(.secondary) }
+                } else { Text(day.sleepUnavailableMessage) }
             }
             if let night = day.night {
                 Section("Sleep continuity") {

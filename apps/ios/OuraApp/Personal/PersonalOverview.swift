@@ -65,7 +65,7 @@ struct PersonalOverview: View {
                     Section {
                         VStack(alignment: .leading, spacing: 6) {
                             Text("Your day starts here").font(.headline)
-                            Text("Connect a source below. Missing measurements stay missing.").font(.subheadline).foregroundStyle(.secondary)
+                            Text("Sync your ring for direct Oura sleep. Apple Health is optional for Apple Watch measurements.").font(.subheadline)
                         }
                         Button("Connect Apple Health", systemImage: "heart.fill") { Task { await model.connectHealth() } }.disabled(model.refreshing)
                         Button("Set up ring", systemImage: "circle.circle", action: openRing)
@@ -86,19 +86,24 @@ struct PersonalOverview: View {
                                         Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(.tertiary)
                                     }
                                 }
+                                Text(day.sleepSourceTitle).font(.subheadline)
                                 Text(day.night?.hours.map { PersonalChartStyle.duration($0) } ?? "Duration unavailable")
                                     .font(.largeTitle.weight(.semibold)).monospacedDigit().contentTransition(.numericText())
                                     .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: date)
                                 if let night = day.night {
+                                    if night.isDirectRing && night.hours == nil { Text("Oura records received; sleep stages are missing or incomplete.").font(.subheadline) }
                                     Text("\(night.asleepStart.map { $0.formatted(date: .omitted, time: .shortened) } ?? "Onset unknown") → \(night.asleepEnd.map { $0.formatted(date: .omitted, time: .shortened) } ?? "Wake unknown")").font(.subheadline).monospacedDigit()
                                     PersonalSleepEssentials(night: night)
                                     if let prepared = model.live.nights[day.date], !prepared.stages.isEmpty {
                                         PersonalStageChart(night: night, stages: prepared.stages, compact: true, interactive: false)
                                     } else { Text("Sleep stages unavailable").font(.caption).foregroundStyle(.secondary) }
                                     Text(PersonalDisplay.sleepStory(night, goal: model.goals.sleepHours)).font(.subheadline).foregroundStyle(.secondary)
-                                } else { Text("No sleep session for this day").font(.subheadline).foregroundStyle(.secondary) }
+                                } else { Text(day.sleepUnavailableMessage).font(.subheadline) }
                             }.padding(.vertical, 8).contentShape(Rectangle())
                         }.buttonStyle(.plain).accessibilityHint("Opens sleep timing, stages and overnight measurements")
+                    }
+                    if day.night == nil, model.preferences.resolvedSleepInput == .directRing {
+                        Button("Sync Oura ring", systemImage: "arrow.triangle.2.circlepath", action: openRing)
                     }
                     Section {
                         Button { selectedScore = .activity } label: {

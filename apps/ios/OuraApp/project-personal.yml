@@ -9,7 +9,7 @@ options:
 settings:
   base:
     MARKETING_VERSION: "0.1.1"
-    CURRENT_PROJECT_VERSION: "48"
+    CURRENT_PROJECT_VERSION: "49"
     PRODUCT_BUNDLE_IDENTIFIER: "$(APP_BUNDLE_ID)"
     TARGETED_DEVICE_FAMILY: "1"   # iPhone only (no iPad multitasking orientation reqs)
     CODE_SIGN_STYLE: Automatic
