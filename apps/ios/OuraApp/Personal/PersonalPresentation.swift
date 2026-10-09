@@ -69,9 +69,10 @@ struct PersonalTopicRow: View {
 struct PersonalMetricReadout: View {
     let title: String
     let value: String
+    var labelColor: Color = .secondary
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(title).font(.caption).foregroundStyle(.secondary)
+            Text(title).font(.caption).foregroundStyle(labelColor)
             Text(value).font(.title3.weight(.semibold)).monospacedDigit().fixedSize(horizontal: false, vertical: true)
         }.frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 6).accessibilityElement(children: .combine)
     }
@@ -83,7 +84,7 @@ struct PersonalSleepEssentials: View {
     var body: some View {
         LazyVGrid(columns: Array(repeating: GridItem(.flexible(), alignment: .leading), count: textSize.isAccessibilitySize ? 1 : 3), alignment: .leading, spacing: 12) {
             ForEach([PersonalMetric.timeInBed, .efficiency, .latency]) { metric in
-                PersonalMetricReadout(title: metric.title, value: PersonalDisplay.value(night.value(metric), metric: metric))
+                PersonalMetricReadout(title: metric.title, value: PersonalDisplay.value(night.value(metric), metric: metric), labelColor: .primary)
             }
         }
     }
