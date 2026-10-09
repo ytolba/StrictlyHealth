@@ -1,0 +1,31 @@
+name: Public iPhone app
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  tests:
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build tools
+        run: |
+          brew install xcodegen
+          rustup target add aarch64-apple-ios aarch64-apple-ios-sim
+      - name: Core and summary tests
+        run: cargo test --locked -p oura-core -p oura-summary --lib
+      - name: Build model-free ring library
+        run: bash apps/ios/build-xcframework.sh
+      - name: Generate public project
+        working-directory: apps/ios/OuraApp
+        run: xcodegen generate --spec project-public.yml
+      - name: Simulator tests
+        working-directory: apps/ios/OuraApp
+        run: |
+          DEVICE=$(xcrun simctl list devices available -j | python3 -c 'import json,sys; d=json.load(sys.stdin); print(next(v["udid"] for k,vs in d["devices"].items() if "iOS" in k for v in vs if "iPhone" in v["name"]))')
+          xcodebuild test -project OuraApp.xcodeproj -scheme OuraApp -destination "platform=iOS Simulator,id=$DEVICE" CODE_SIGNING_ALLOWED=NO -resultBundlePath build/PublicTests.xcresult
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: public-ios-test-results
+          path: apps/ios/OuraApp/build/PublicTests.xcresult

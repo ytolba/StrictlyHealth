@@ -1,0 +1,17 @@
+[package]
+name = "oura-summary"
+description = "The dashboard summary computation, shared by the web (oura-cli) and native (oura-core) clients"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+oura-protocol = { path = "../../vendor/open_oura/crates/oura-protocol" }
+oura-store = { path = "../../vendor/oura-store" }
+oura-analysis = { path = "../../vendor/open_oura/crates/oura-analysis" }
+serde_json = "1"
+anyhow = "1"
+
+[dev-dependencies]
+rusqlite = "0.31"

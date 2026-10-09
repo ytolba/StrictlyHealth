@@ -1,0 +1,150 @@
+//! Transport abstraction over the ring's BLE link.
+//!
+//! The protocol is request/response with asynchronous notifications. [`Transport`]
+//! captures just what the client needs — write a request, and subscribe to the
+//! stream of inbound frames — so the higher layers can be exercised with a mock
+//! in tests while [`crate::ble`] provides the real `btleplug` implementation.
+
+use std::time::Duration;
+
+use async_trait::async_trait;
+use tokio::sync::broadcast;
+
+use crate::error::Result;
+
+/// A bidirectional link to a ring.
+#[async_trait]
+pub trait Transport: Send + Sync {
+    /// Write a raw request frame to the ring's write characteristic.
+    async fn write(&self, data: &[u8]) -> Result<()>;
+
+    /// Subscribe to inbound notification frames (raw bytes, one per notification).
+    fn subscribe(&self) -> broadcast::Receiver<Vec<u8>>;
+}
+
+/// Write `request` and collect notification frames until the link is quiet for
+/// `quiet` (i.e. no new frame arrives within that window). This matches the
+/// ring's behaviour of emitting one or more notifications per request with no
+/// explicit terminator on most commands.
+pub async fn transact<T>(transport: &T, request: &[u8], quiet: Duration) -> Result<Vec<Vec<u8>>>
+where
+    T: Transport + ?Sized,
+{
+    transact_until(transport, request, quiet, |_| false).await
+}
+
+/// Like [`transact`], but returns as soon as a frame satisfying `is_terminal`
+/// arrives, instead of always waiting out the quiet window after the last frame.
+///
+/// Most ring commands have a well-known response (the official app proceeds the
+/// moment it sees it), so terminating on it saves the full `quiet` window per
+/// request — which dominates the handshake/setup phase otherwise. The quiet
+/// window remains as the fallback for unexpected responses or a dead link.
+pub async fn transact_until<T, F>(
+    transport: &T,
+    request: &[u8],
+    quiet: Duration,
+    mut is_terminal: F,
+) -> Result<Vec<Vec<u8>>>
+where
+    T: Transport + ?Sized,
+    F: FnMut(&[u8]) -> bool,
+{
+    let mut rx = transport.subscribe();
+    // Drop any backlog so we only observe responses to *this* request.
+    while rx.try_recv().is_ok() {}
+
+    transport.write(request).await?;
+
+    let mut frames = Vec::new();
+    loop {
+        match tokio::time::timeout(quiet, rx.recv()).await {
+            Ok(Ok(frame)) => {
+                let done = is_terminal(&frame);
+                frames.push(frame);
+                if done {
+                    break;
+                }
+            }
+            Ok(Err(broadcast::error::RecvError::Lagged(count))) => {
+                return Err(crate::error::Error::Protocol(format!(
+                    "notification buffer lost {count} frame(s); refusing a partial response"
+                )));
+            }
+            // Channel closed or quiet window elapsed: we're done collecting.
+            _ => break,
+        }
+    }
+    Ok(frames)
+}
+
+#[cfg(test)]
+pub(crate) mod mock {
+    //! A scripted transport for unit tests: maps request hex prefixes to canned
+    //! response frames.
+    use super::*;
+    use std::collections::HashMap;
+    use std::sync::Mutex;
+
+    pub struct MockTransport {
+        tx: broadcast::Sender<Vec<u8>>,
+        responses: Mutex<HashMap<String, Vec<Vec<u8>>>>,
+        writes: Mutex<Vec<Vec<u8>>>,
+    }
+
+    impl MockTransport {
+        pub fn new() -> Self {
+            let (tx, _) = broadcast::channel(64);
+            Self {
+                tx,
+                responses: Mutex::new(HashMap::new()),
+                writes: Mutex::new(Vec::new()),
+            }
+        }
+
+        /// Register canned responses keyed by the request's full hex.
+        pub fn on(&self, request_hex: &str, responses: &[&str]) {
+            self.responses.lock().unwrap().insert(
+                request_hex.to_string(),
+                responses.iter().map(|h| hex::decode(h).unwrap()).collect(),
+            );
+        }
+
+        pub fn writes(&self) -> Vec<Vec<u8>> {
+            self.writes.lock().unwrap().clone()
+        }
+    }
+
+    #[async_trait]
+    impl Transport for MockTransport {
+        async fn write(&self, data: &[u8]) -> Result<()> {
+            self.writes.lock().unwrap().push(data.to_vec());
+            let key = hex::encode(data);
+            if let Some(frames) = self.responses.lock().unwrap().get(&key) {
+                for f in frames {
+                    let _ = self.tx.send(f.clone());
+                }
+            }
+            Ok(())
+        }
+
+        fn subscribe(&self) -> broadcast::Receiver<Vec<u8>> {
+            self.tx.subscribe()
+        }
+    }
+}
+
+#[cfg(test)]
+mod loss_tests {
+    use super::*;
+    #[tokio::test]
+    async fn dropped_frames_fail_instead_of_advancing_history() {
+        let mock = mock::MockTransport::new();
+        let frames = vec!["1106000000000000"; 100];
+        mock.on("0803000000", &frames);
+        let error = transact(&mock, &[8, 3, 0, 0, 0], Duration::from_millis(1))
+            .await
+            .unwrap_err();
+        assert!(error.to_string().contains("notification buffer lost"));
+    }
+}

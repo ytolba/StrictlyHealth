@@ -1,0 +1,5 @@
+// Override these on your own machine; never commit a signing identity.
+APP_BUNDLE_ID = org.openhealth.app
+PRODUCT_BUNDLE_IDENTIFIER = $(APP_BUNDLE_ID)
+DEVELOPMENT_TEAM =
+#include? "Signing.local.xcconfig"

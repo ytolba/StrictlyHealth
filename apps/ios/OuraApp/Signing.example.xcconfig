@@ -1,0 +1,3 @@
+// Copy to Signing.local.xcconfig, then set your own values.
+APP_BUNDLE_ID = com.yourdomain.openhealth
+DEVELOPMENT_TEAM = YOUR_TEAM_ID

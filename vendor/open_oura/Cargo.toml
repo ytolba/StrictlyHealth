@@ -1,0 +1,9 @@
+[workspace]
+resolver = "2"
+members = ["crates/oura-protocol", "crates/oura-link", "crates/oura-analysis"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/Th0rgal/open_oura"

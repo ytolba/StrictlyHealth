@@ -1,0 +1,500 @@
+//! Low-level protocol: GATT UUIDs, the `tag|length|payload` packet framing, and
+//! request builders. All multi-byte integers are little-endian. Extended
+//! operations are carried under outer tag `0x2f` with the first payload byte as
+//! the extended op tag.
+
+use uuid::Uuid;
+
+/// Primary Oura ring GATT service (same across Ring 3/4/5).
+pub const OURA_SERVICE: Uuid = Uuid::from_u128(0x98ed0001_a541_11e4_b6a0_0002a5d5c51b);
+/// Read/notify characteristic — responses and async notifications arrive here.
+pub const OURA_NOTIFY: Uuid = Uuid::from_u128(0x98ed0003_a541_11e4_b6a0_0002a5d5c51b);
+/// Write characteristic — protocol requests are written here.
+pub const OURA_WRITE: Uuid = Uuid::from_u128(0x98ed0002_a541_11e4_b6a0_0002a5d5c51b);
+
+/// First tag value used by ring history events (`0x41`). Everything `>=` this is
+/// a history-event frame rather than a command response.
+pub const HISTORY_EVENT_PREFIX: u8 = 0x41;
+
+/// Feature capability ids (extended `0x2f` feature ops).
+pub mod feature {
+    pub const BACKGROUND_DFU: u8 = 0x00;
+    pub const RESEARCH_DATA: u8 = 0x01;
+    pub const DAYTIME_HR: u8 = 0x02;
+    pub const EXERCISE_HR: u8 = 0x03;
+    pub const SPO2: u8 = 0x04;
+    pub const RESTING_HR: u8 = 0x08;
+    pub const CHARGING_CONTROL: u8 = 0x0e;
+}
+
+/// Feature modes used by `SetFeatureMode` (extended `0x22`).
+pub mod feature_mode {
+    pub const OFF: u8 = 0x00;
+    pub const AUTOMATIC: u8 = 0x01;
+    pub const REQUESTED: u8 = 0x02;
+    /// Live streaming mode used for on-screen "current heart rate".
+    pub const CONNECTED_LIVE: u8 = 0x03;
+}
+
+/// A decoded Oura protocol frame: a tag byte, a declared length, and the payload.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Packet {
+    pub tag: u8,
+    pub payload: Vec<u8>,
+}
+
+impl Packet {
+    /// Build a packet from a tag and payload.
+    pub fn new(tag: u8, payload: Vec<u8>) -> Self {
+        Self { tag, payload }
+    }
+
+    /// Encode to wire bytes: `[tag, len, payload..]`.
+    pub fn encode(&self) -> Vec<u8> {
+        let mut out = Vec::with_capacity(self.payload.len() + 2);
+        out.push(self.tag);
+        out.push(self.payload.len() as u8);
+        out.extend_from_slice(&self.payload);
+        out
+    }
+
+    /// Parse a notification frame leniently. Returns `None` if too short to hold a
+    /// header. If the declared length disagrees with the buffer, the remaining
+    /// bytes after the header are used (rings occasionally pad frames).
+    pub fn parse(frame: &[u8]) -> Option<Packet> {
+        if frame.len() < 2 {
+            return None;
+        }
+        let tag = frame[0];
+        let len = frame[1] as usize;
+        let payload = match frame.get(2..2 + len) {
+            Some(slice) => slice.to_vec(),
+            None => frame[2..].to_vec(),
+        };
+        Some(Packet { tag, payload })
+    }
+
+    /// Parse every complete `tag|length|payload` packet concatenated into one BLE
+    /// notification. Ring 5 commonly packs history events this way after
+    /// `GetEvent`; older code that parsed only the first packet silently dropped
+    /// the rest of the notification.
+    pub fn parse_many(frame: &[u8]) -> Vec<Packet> {
+        let mut out = Vec::new();
+        let mut i = 0usize;
+        while i + 2 <= frame.len() {
+            let tag = frame[i];
+            let len = frame[i + 1] as usize;
+            let start = i + 2;
+            let end = start + len;
+            if end > frame.len() {
+                break;
+            }
+            out.push(Packet {
+                tag,
+                payload: frame[start..end].to_vec(),
+            });
+            i = end;
+        }
+        if out.is_empty() {
+            if let Some(p) = Packet::parse(frame) {
+                out.push(p);
+            }
+        }
+        out
+    }
+
+    /// The extended op tag (first payload byte) for `0x2f` frames.
+    pub fn ext_tag(&self) -> Option<u8> {
+        if self.tag == 0x2f {
+            self.payload.first().copied()
+        } else {
+            None
+        }
+    }
+}
+
+// --- Request builders -------------------------------------------------------
+
+/// Get firmware / API / bootloader / BT-stack / MAC (`0x08`).
+pub fn req_firmware() -> Vec<u8> {
+    vec![0x08, 0x03, 0x00, 0x00, 0x00]
+}
+
+/// Get battery level (`0x0c`).
+pub fn req_battery() -> Vec<u8> {
+    Packet::new(0x0c, vec![]).encode()
+}
+
+/// Request the app-auth nonce (`0x2f` ext `0x2b`).
+pub fn req_auth_nonce() -> Vec<u8> {
+    vec![0x2f, 0x01, 0x2b]
+}
+
+/// Authenticate with the AES-encrypted nonce (`0x2f` ext `0x2d`).
+pub fn req_authenticate(encrypted: &[u8; 16]) -> Vec<u8> {
+    let mut payload = Vec::with_capacity(17);
+    payload.push(0x2d);
+    payload.extend_from_slice(encrypted);
+    Packet::new(0x2f, payload).encode()
+}
+
+/// Install a 16-byte auth key on a factory-reset ring (`0x24`).
+pub fn req_set_auth_key(key: &[u8; 16]) -> Vec<u8> {
+    Packet::new(0x24, key.to_vec()).encode()
+}
+
+/// Set the ring clock to a UTC unix timestamp (`0x12`).
+pub fn req_sync_time(unix_secs: u64, timezone_half_hours: u8) -> Vec<u8> {
+    let mut payload = Vec::with_capacity(9);
+    payload.extend_from_slice(&unix_secs.to_le_bytes());
+    payload.push(timezone_half_hours);
+    Packet::new(0x12, payload).encode()
+}
+
+/// App-style time sync used by Ring 4/5 app captures (`12 09 <token>
+/// <unix/256:u24 LE> 00000000 f6`). This stamps the ring's internal RTC and is
+/// the shape observed in the official-app connect sequence.
+pub fn req_sync_time_counter(unix_secs: u64, token: u8) -> Vec<u8> {
+    let counter = (unix_secs / 256) as u32;
+    vec![
+        0x12,
+        0x09,
+        token,
+        (counter & 0xff) as u8,
+        ((counter >> 8) & 0xff) as u8,
+        ((counter >> 16) & 0xff) as u8,
+        0x00,
+        0x00,
+        0x00,
+        0x00,
+        0xf6,
+    ]
+}
+
+/// Enable/disable the app's history/event stream registration (`0x16`).
+pub fn req_stream_subscribe(mode: u8) -> Vec<u8> {
+    Packet::new(0x16, vec![mode]).encode()
+}
+
+/// Subscribe one app event category (`18 03 <category> <flags:u16 LE>`).
+pub fn req_event_subscribe(category: u8, flags: u16) -> Vec<u8> {
+    let mut payload = Vec::with_capacity(3);
+    payload.push(category);
+    payload.extend_from_slice(&flags.to_le_bytes());
+    Packet::new(0x18, payload).encode()
+}
+
+/// Enable/disable the async notification flags (`0x1c`).
+pub fn req_set_notification(flags: u8) -> Vec<u8> {
+    Packet::new(0x1c, vec![flags]).encode()
+}
+
+/// Get a capabilities page (`0x2f` ext `0x01`).
+pub fn req_capabilities(page: u8) -> Vec<u8> {
+    vec![0x2f, 0x02, 0x01, page]
+}
+
+/// Product-info request slots (`0x18`). Each returns a `0x19` response.
+pub mod product {
+    /// Serial number slot (returns ASCII serial).
+    pub const SERIAL: [u8; 5] = [0x18, 0x03, 0x08, 0x00, 0x10];
+    /// Hardware id slot (e.g. `BLB_03`).
+    pub const HARDWARE: [u8; 5] = [0x18, 0x03, 0x18, 0x00, 0x10];
+    /// Product/design code slot.
+    pub const CODE: [u8; 5] = [0x18, 0x03, 0x28, 0x00, 0x09];
+}
+
+/// Get up to `max_events` history events from `start` (deciseconds) (`0x10`).
+///
+/// `flags` is passed through verbatim; the app uses `-1` to request all types.
+pub fn req_get_event(start_deciseconds: u32, max_events: u8, flags: i32) -> Vec<u8> {
+    let mut payload = Vec::with_capacity(9);
+    payload.extend_from_slice(&start_deciseconds.to_le_bytes());
+    payload.push(max_events);
+    payload.extend_from_slice(&flags.to_le_bytes());
+    Packet::new(0x10, payload).encode()
+}
+
+/// Acknowledge history events through `cursor` without asking for more records.
+/// The official app sends this after a fetch burst using `max_events = 0`.
+///
+/// Not used by `OuraClient::drain_events`: on Horizon 3.4.3 / Ring 5 the ring
+/// treats this as another fetch and can stall for minutes before 0x11. The
+/// drain loop continues with a cursor-addressed GetEvent instead.
+pub fn req_get_event_ack(cursor: u32) -> Vec<u8> {
+    req_get_event(cursor, 0, -1)
+}
+
+/// Extended history event fetch used by the Android app on newer rings.
+///
+/// `start_ms` is the history cursor in milliseconds. Buffer `0` is the normal
+/// history-event buffer; buffer `1` is the raw/RData buffer.
+pub fn req_ext_get_event(start_ms: u64, max_events: u16, buffer_id: u8) -> Vec<u8> {
+    let mut payload = Vec::with_capacity(12);
+    payload.push(0x41);
+    payload.push(buffer_id);
+    payload.extend_from_slice(&start_ms.to_le_bytes());
+    payload.extend_from_slice(&max_events.to_le_bytes());
+    Packet::new(0x2f, payload).encode()
+}
+
+/// Release flash-buffered data into the notification stream (`28 01 00`).
+/// Ring 5 accepts this shape and responds on `0x29`; older docs also label the
+/// same opcode as the sleep-analysis check without force.
+pub fn req_data_flush() -> Vec<u8> {
+    vec![0x28, 0x01, 0x00]
+}
+
+/// Get a feature's status (`0x2f` ext `0x20`).
+pub fn req_feature_status(feature: u8) -> Vec<u8> {
+    vec![0x2f, 0x02, 0x20, feature]
+}
+
+/// Generic parameter read (`2f 02 20 <param_id>`) from the app setup sweep.
+pub fn req_param_read(param_id: u8) -> Vec<u8> {
+    vec![0x2f, 0x02, 0x20, param_id]
+}
+
+/// Generic byte-0 parameter write (`2f 03 22 <param_id> <value>`).
+pub fn req_param_write_byte0(param_id: u8, value: u8) -> Vec<u8> {
+    vec![0x2f, 0x03, 0x22, param_id, value]
+}
+
+/// Generic byte-2 parameter write/subscription write (`2f 03 26 <param_id> <value>`).
+pub fn req_param_write_byte2(param_id: u8, value: u8) -> Vec<u8> {
+    vec![0x2f, 0x03, 0x26, param_id, value]
+}
+
+/// Get a feature's latest values (`0x2f` ext `0x24`).
+pub fn req_feature_latest(feature: u8) -> Vec<u8> {
+    vec![0x2f, 0x02, 0x24, feature]
+}
+
+/// Set a feature's mode (`0x2f` ext `0x22`).
+pub fn req_set_feature_mode(feature: u8, mode: u8) -> Vec<u8> {
+    vec![0x2f, 0x03, 0x22, feature, mode]
+}
+
+/// Feature *capability* ids for `SetFeatureSubscription` (distinct numbering from
+/// the `feature` modes above). From the app's `FeatureCapabilityId` enum.
+pub mod capability {
+    pub const RESEARCH_DATA: u8 = 0x01;
+    pub const REAL_STEPS: u8 = 0x0b;
+    pub const AMBIENT_LIGHT: u8 = 0x10;
+    // 0x12 per the app's FeatureCapabilityId (CAP_RAW_DATA_SAMPLER = DFUStart.REQUEST_LENGTH = 18).
+    // (Was mislabeled 0x14, which is a different, version-0 capability on Ring 5.)
+    pub const RAW_DATA_SAMPLER: u8 = 0x12;
+    pub const ATLAS: u8 = 0x15; // bioZ / EDA sensing-discovery platform
+}
+
+/// Subscription modes for `SetFeatureSubscription` (app `SubscriptionMode`).
+pub mod subscription_mode {
+    pub const OFF: u8 = 0x00;
+    pub const STATE: u8 = 0x01;
+    pub const LATEST: u8 = 0x02;
+    pub const FEATURE_DATA: u8 = 0x04;
+}
+
+/// `SetFeatureSubscription` — subscribe/unsubscribe a feature capability (e.g.
+/// real steps, Atlas/bioZ). Extended op `0x2f`, sub-op `0x26`; response sub-op is
+/// `0x27`. From the app's `SetFeatureSubscription` operation.
+pub fn req_set_feature_subscription(capability: u8, mode: u8) -> Vec<u8> {
+    vec![0x2f, 0x03, 0x26, capability, mode]
+}
+
+/// Ask the ring to run sleep analysis (`28 01 <force>`). After it postprocesses,
+/// `sleep_phase`/`sleep_summary` events appear in history. Response tag `0x29`.
+pub fn req_check_sleep_analysis(force: bool) -> Vec<u8> {
+    vec![0x28, 0x01, force as u8]
+}
+
+/// Real-time measurement type bit flags for [`req_set_realtime`].
+pub mod realtime {
+    /// Live accelerometer x/y/z stream (the "wave to test motion" path).
+    pub const ACM: u32 = 0x20;
+    /// On-demand live PPG/HR sample.
+    pub const ON_DEMAND: u32 = 0x200;
+    /// 2 Hz mode flag.
+    pub const TWO_HERTZ: u32 = 0x400;
+    /// ACM measurement-indication response tag.
+    pub const ACM_RESPONSE_TAG: u8 = 0x33;
+}
+
+/// Start a time-boxed real-time measurement stream (`0x06`): a `u32` type bitmask
+/// (see [`realtime`]), a `u16` max duration in **minutes** (the ring auto-stops
+/// when it expires), and a `u8` delay.
+pub fn req_set_realtime(bitmask: u32, max_duration_min: u16, delay: u8) -> Vec<u8> {
+    let mut payload = Vec::with_capacity(7);
+    payload.extend_from_slice(&bitmask.to_le_bytes());
+    payload.extend_from_slice(&max_duration_min.to_le_bytes());
+    payload.push(delay);
+    Packet::new(0x06, payload).encode()
+}
+
+/// Stop all real-time measurements (`06 04 00000000`, bitmask 0 = off).
+pub fn req_realtime_off() -> Vec<u8> {
+    Packet::new(0x06, vec![0, 0, 0, 0]).encode()
+}
+
+/// RData bulk raw-sampler operations (`0x03`). This writes a persistent sampling
+/// session to the ring's flash, so the lifecycle is mandatory:
+/// `configure` → drain with `get_page` → `stop` → `clear`.
+pub mod rdata {
+    /// Raw signal modes the ring can sample (`RDataRequestDataType`), by wire code.
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    #[repr(u8)]
+    pub enum DataType {
+        None = 0,
+        Ppg250Hz = 1,
+        Ppg125Hz = 2,
+        Acm8g50Hz = 3,
+        Acm2g50Hz = 4,
+        Gyro2000_50Hz = 5,
+        Temp1Min = 6,
+        Temp10s = 7,
+        Metadata = 8,
+        Ppg50Hz = 9,
+        Temp10Hz = 10,
+        Acm4g50Hz = 11,
+        Gyro500_50Hz = 12,
+        Gyro125_50Hz = 13,
+        Acm8g10Hz = 19,
+        Acm2g10Hz = 20,
+        Gyro2000_10Hz = 21,
+        Acm4g10Hz = 27,
+        Gyro500_10Hz = 28,
+        Gyro125_10Hz = 29,
+    }
+
+    pub const SUB_GET_PAGE: u8 = 1;
+    pub const SUB_CONFIGURE: u8 = 2;
+    pub const SUB_STOP: u8 = 3;
+    pub const SUB_CLEAR: u8 = 4;
+    pub const SUB_STATE: u8 = 5;
+}
+
+/// Query RData collection state (`030105`) — read-only, safe.
+pub fn req_rdata_state() -> Vec<u8> {
+    vec![0x03, 0x01, rdata::SUB_STATE]
+}
+
+/// Stop an RData collection session (`030103`).
+pub fn req_rdata_stop() -> Vec<u8> {
+    vec![0x03, 0x01, rdata::SUB_STOP]
+}
+
+/// Clear RData session/data from flash (`030104`).
+pub fn req_rdata_clear() -> Vec<u8> {
+    vec![0x03, 0x01, rdata::SUB_CLEAR]
+}
+
+/// Request an RData page by index (`0303 01 <page u16 LE>`).
+pub fn req_rdata_get_page(page: u16) -> Vec<u8> {
+    let mut payload = vec![rdata::SUB_GET_PAGE];
+    payload.extend_from_slice(&page.to_le_bytes());
+    Packet::new(0x03, payload).encode()
+}
+
+/// Configure/start an RData session for one or more signal types. Layout matches
+/// the app's `RDataStart`: `03 <len> 02 <startTime u32 LE> <currentTime u32 LE>
+/// <type bytes...>` (length byte = type count + 9).
+pub fn req_rdata_configure(
+    types: &[rdata::DataType],
+    start_unix: u32,
+    current_unix: u32,
+) -> Vec<u8> {
+    let mut payload = Vec::with_capacity(types.len() + 9);
+    payload.push(rdata::SUB_CONFIGURE);
+    payload.extend_from_slice(&start_unix.to_le_bytes());
+    payload.extend_from_slice(&current_unix.to_le_bytes());
+    for t in types {
+        payload.push(*t as u8);
+    }
+    Packet::new(0x03, payload).encode()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn encodes_and_parses_roundtrip() {
+        let p = Packet::new(0x2f, vec![0x2b]);
+        let bytes = p.encode();
+        assert_eq!(bytes, vec![0x2f, 0x01, 0x2b]);
+        assert_eq!(Packet::parse(&bytes), Some(p));
+    }
+
+    #[test]
+    fn firmware_request_matches_known_hex() {
+        assert_eq!(hex::encode(req_firmware()), "0803000000");
+    }
+
+    #[test]
+    fn get_event_matches_known_hex() {
+        // start=0, max=8, flags=-1 -> 10 09 00000000 08 ffffffff
+        assert_eq!(
+            hex::encode(req_get_event(0, 8, -1)),
+            "10090000000008ffffffff"
+        );
+        assert_eq!(hex::encode(req_get_event_ack(0)), "10090000000000ffffffff");
+        assert_eq!(
+            hex::encode(req_ext_get_event(123_400, u16::MAX, 0)),
+            "2f0c410008e2010000000000ffff"
+        );
+    }
+
+    #[test]
+    fn parses_concatenated_packets() {
+        let frames = Packet::parse_many(&hex::decode("0d0639000000360f290100").unwrap());
+        assert_eq!(frames.len(), 2);
+        assert_eq!(frames[0].tag, 0x0d);
+        assert_eq!(frames[1].tag, 0x29);
+    }
+
+    #[test]
+    fn app_setup_requests_match_known_hex() {
+        assert_eq!(
+            hex::encode(req_sync_time_counter(0, 0)),
+            "12090000000000000000f6"
+        );
+        assert_eq!(hex::encode(req_stream_subscribe(2)), "160102");
+        assert_eq!(hex::encode(req_event_subscribe(0x14, 0x1000)), "1803140010");
+        assert_eq!(hex::encode(req_data_flush()), "280100");
+        assert_eq!(hex::encode(req_param_read(0x02)), "2f022002");
+        assert_eq!(hex::encode(req_param_write_byte0(0x02, 0x03)), "2f03220203");
+        assert_eq!(hex::encode(req_param_write_byte2(0x02, 0x02)), "2f03260202");
+    }
+
+    #[test]
+    fn realtime_requests_match_known_hex() {
+        // ACM (0x20), 1 minute, delay 0 -> 06 07 20000000 0100 00
+        assert_eq!(
+            hex::encode(req_set_realtime(realtime::ACM, 1, 0)),
+            "060720000000010000"
+        );
+        // off -> 06 04 00000000
+        assert_eq!(hex::encode(req_realtime_off()), "060400000000");
+    }
+
+    #[test]
+    fn rdata_requests_match_known_hex() {
+        assert_eq!(hex::encode(req_rdata_state()), "030105");
+        assert_eq!(hex::encode(req_rdata_stop()), "030103");
+        assert_eq!(hex::encode(req_rdata_clear()), "030104");
+        assert_eq!(hex::encode(req_rdata_get_page(0)), "0303010000");
+        // configure with a single NONE type, zero timestamps -> captured zeroed-start
+        assert_eq!(
+            hex::encode(req_rdata_configure(&[rdata::DataType::None], 0, 0)),
+            "030a02000000000000000000"
+        );
+    }
+
+    #[test]
+    fn parse_handles_padding() {
+        // declared length 1 but extra trailing byte
+        let p = Packet::parse(&[0x25, 0x01, 0x00]).unwrap();
+        assert_eq!(p.tag, 0x25);
+        assert_eq!(p.payload, vec![0x00]);
+    }
+}

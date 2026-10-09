@@ -1,0 +1,35 @@
+[package]
+name = "oura-core"
+description = "UniFFI surface over the shared Oura core — consumed by the iOS/native clients"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+name = "oura_core"
+# lib for the host bins; staticlib for iOS linking; cdylib for library-mode bindgen.
+crate-type = ["lib", "staticlib", "cdylib"]
+
+[dependencies]
+oura-analysis = { path = "../../vendor/open_oura/crates/oura-analysis" }
+oura-store = { path = "../../vendor/oura-store" }
+oura-protocol = { path = "../../vendor/open_oura/crates/oura-protocol" }
+oura-summary = { path = "../oura-summary" }
+# the ring client + transport trait, WITHOUT btleplug (iOS supplies the transport)
+oura-link = { path = "../../vendor/open_oura/crates/oura-link", default-features = false }
+uniffi = { version = "0.28", features = ["cli", "tokio"] }
+tokio = { version = "1", features = ["sync", "rt", "rt-multi-thread", "macros", "time"] }
+async-trait = "0.1"
+# CSPRNG for minting a ring auth key on device (SecRandomCopyBytes on Apple)
+getrandom = "0.2"
+thiserror = "1"
+serde_json = "1"
+# direct read-only queries for the raw-event browser (oura-store exposes no
+# name-carrying event query); same version oura-store links, so one sqlite.
+rusqlite = { version = "0.31" }
+
+[[bin]]
+# `cargo run --bin uniffi-bindgen -- generate --library <dylib> --language swift ...`
+name = "uniffi-bindgen"
+path = "uniffi-bindgen.rs"

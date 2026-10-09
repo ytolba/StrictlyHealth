@@ -1,0 +1,14 @@
+[workspace]
+resolver = "2"
+members = ["crates/oura-core", "crates/oura-summary"]
+exclude = ["vendor/open_oura"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/ytolba/StrictlyHealth"
+
+[profile.release]
+lto = true
+strip = true

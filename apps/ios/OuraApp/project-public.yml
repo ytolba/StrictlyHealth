@@ -1,0 +1,3 @@
+# Public entry point; the legacy filename is kept so existing build instructions work.
+include:
+  - project-personal.yml
