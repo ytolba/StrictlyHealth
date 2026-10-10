@@ -45,9 +45,11 @@ not remove Apple's code-signing requirements.
 
 ## Recording and reading sleep
 
-Wear your ring overnight, then use **Ring → Sync ring** in the morning. The ring
+Wear your ring overnight, then open the app in the morning. The ring
 records supported measurements; this app downloads them during history sync.
-Opening the app checks battery only, not new sleep history. Tap Sleep on Today
+Opening the app starts history sync with a saved key and supported ring. Manual
+**Ring → Sync ring** remains available. Sleep is filed under the wake-up date.
+Tap Sleep on Today
 for essentials, stages, awakenings, continuity, weekly rhythm and physiology.
 Missing or incomplete stages stay unavailable. Firmware determines which metrics
 the ring supplies; this project does not promise every official Oura metric.
@@ -65,9 +67,11 @@ Read [the formulas](SLEEP.md) for coverage requirements and interpretation.
 
 ## Battery and connection
 
-Opening the app checks battery with the existing device-only key, without a full
-history sync. Rapid foreground changes are coalesced. A check waits up to 10 seconds
-for Bluetooth and 15 seconds for authenticated status. If unreachable, the saved
+Cold launch attempts a history sync with the existing device-only key, refreshing
+battery as part of it. Rapid foreground changes are coalesced; normal returns use a
+three-minute cooldown, while interrupted transfers resume from their checkpoint.
+The loading screen lets you continue with saved data during transfer, or retry after
+a failure. An automatic fresh scan waits up to 10 seconds for Bluetooth. If unreachable, the saved
 percentage stays visible; tap the top-right indicator for its timestamp and retry.
 “Connected” means the current authenticated link, not a successful sync sometime
 in the past. The app releases this status link in the background and on full sync.

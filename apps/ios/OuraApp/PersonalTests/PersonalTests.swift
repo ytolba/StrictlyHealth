@@ -3,6 +3,44 @@ import SwiftData
 @testable import OuraApp
 
 final class PersonalTests: XCTestCase {
+    func testCoreClockDiagnosticsAcceptCurrentArraysAndLegacyMaps() throws {
+        for payload in ["[]", "{}", "null"] {
+            let summary = try JSONDecoder().decode(Summary.self, from: Data("{\"clock\":{\"undated_reasons\":\(payload)}}".utf8))
+            XCTAssertEqual(summary.clock?.undated_reasons.count, 0)
+        }
+        let current = try JSONDecoder().decode(Summary.self, from: Data("""
+        {"clock":{"undated_reasons":[{"reason":"missing_anchor","count":2,"recoverable":true,"message":"Synthetic missing anchor","span_h":1.5}]}}
+        """.utf8))
+        XCTAssertEqual(current.clock?.undated_reasons.first?.count, 2)
+        XCTAssertEqual(current.clock?.undated_reasons.first?.recoverable, true)
+        let legacy = try JSONDecoder().decode(Summary.self, from: Data("{\"clock\":{\"undated_reasons\":{\"missing_anchor\":3}}}".utf8))
+        XCTAssertEqual(legacy.clock?.undated_reasons.first?.count, 3)
+    }
+    func testRingEpochsAreNotStretchedAndWakeDateOwnsNight() throws {
+        let wake = Calendar.current.startOfDay(for: today).addingTimeInterval(6 * 3600)
+        let start = Int64(wake.addingTimeInterval(-3600).timeIntervalSince1970)
+        let end = Int64(wake.timeIntervalSince1970)
+        let data = Data("""
+        {"device":{"serial":"synthetic-test"},"nights":[{"start_unix":\(start),"end_unix":\(end),"staging_source":"ring","stages_full":[4,2,3,1],"staging_complete":true,"staging_coverage_pct":100}]}
+        """.utf8)
+        let summary = try JSONDecoder().decode(Summary.self, from: data)
+        let days = PersonalAssembler.build(ring: summary, health: PersonalHealthSnapshot(), preferences: PersonalPreferences(), now: wake)
+        let night = try XCTUnwrap(days.last?.night)
+        XCTAssertEqual(night.stages.count, 4)
+        XCTAssertEqual(night.stages[0].end.timeIntervalSince(night.stages[0].start), 30)
+        XCTAssertEqual(night.stages[1].start.timeIntervalSince(night.start), 30)
+        XCTAssertNil(night.hours) // Four epochs cannot describe a whole hour.
+        XCTAssertEqual(night.sleepSourceTitle, "Oura · Bluetooth")
+    }
+    @MainActor func testAutomaticSyncScheduling() {
+        let now = Date(timeIntervalSince1970: 10000)
+        let recent = now.addingTimeInterval(-5)
+        XCTAssertTrue(RingSync.shouldSyncAutomatically(now: now, successful: recent, attempted: recent, incomplete: false, paused: false, force: true))
+        XCTAssertFalse(RingSync.shouldSyncAutomatically(now: now, successful: nil, attempted: recent, incomplete: true, paused: false, force: false))
+        XCTAssertTrue(RingSync.shouldSyncAutomatically(now: now, successful: recent, attempted: recent, incomplete: true, paused: true, force: false))
+        XCTAssertFalse(RingSync.shouldSyncAutomatically(now: now, successful: recent, attempted: nil, incomplete: false, paused: false, force: false))
+        XCTAssertTrue(RingSync.shouldSyncAutomatically(now: now, successful: now.addingTimeInterval(-181), attempted: nil, incomplete: false, paused: false, force: false))
+    }
     func testDefaultSleepModeIsStrictDirectOura() {
         XCTAssertEqual(PersonalPreferences().resolvedSleepInput, .directRing)
         XCTAssertNil(PersonalSleepSelection.choose(direct: nil, health: [.watch: insightNight(), .ring: insightNight()], input: .directRing, preferred: .ring))

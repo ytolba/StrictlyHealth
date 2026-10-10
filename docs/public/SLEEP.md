@@ -1,7 +1,8 @@
 # Sleep insights
 
 These are descriptive calculations, not medical assessments or Oura algorithms.
-Download the recorded night with Ring → Sync ring. Account exports are optional
+Opening the app downloads history with the saved pairing key; Ring → Sync ring
+is also available manually. Sleep is filed under its wake-up date. Account exports are optional
 historical backfill and never become live app scores or weekly live insights.
 
 The default sleep mode is **Oura · direct Bluetooth**: missing or incomplete direct
@@ -10,6 +11,12 @@ sleep and automatic fallback are explicit options in Settings. The source shown 
 Today and Sleep distinguishes direct Bluetooth, Apple Watch via Apple Health, Oura
 app records via Apple Health, and historical account exports. Stage timelines are
 never combined across those sources. Sync completion is not proof of complete stages.
+
+Direct ring epochs retain their reported 30-second duration and stage labels;
+they are not smoothed or reclassified as deep sleep. Delayed analysis packets are
+aligned to an explicit bed window only when separate sleep-summary offsets agree,
+the boot clock matches, and a complete page burst fits with less than one page of
+trailing padding. Conflicting or incomplete records are not stretched to fit.
 
 | Readout | Calculation and limits |
 | --- | --- |

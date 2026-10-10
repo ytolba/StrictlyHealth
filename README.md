@@ -18,7 +18,7 @@ Oura API subscription, proprietary model download or bundled health database.
 - Live Sleep and Activity goal scores with editable targets and transparent breakdowns; custom Recovery uses comparable personal baselines. All are independent experimental formulas, not Oura algorithms or clinical assessments.
 - Dated history and live trends. Historical imports remain separate from live scores and charts.
 - A sleep-first native Today screen that opens separate Sleep, Activity and Recovery reports. Sleep includes timing, stage durations/shares, awakenings, a touch-to-inspect timeline, overnight HR/HRV and a seven-day comparison. Activity and Recovery have their own focused charts. HRV methods/device identities are not joined; display signals are bounded without removing originals.
-- Color-banded app-score readouts, a native launch screen, and a top-right ring battery/connection indicator. Repeated technical subtitles are replaced by expandable source/score details; estimates remain identifiable. Foreground battery checks are bounded and do not drain history.
+- Color-banded app-score readouts, a native loading screen, and a top-right ring battery/connection indicator. Opening the app downloads ring history and refreshes battery through the saved pairing; short foreground transitions are coalesced. Saved data remains accessible during sync or a connection failure.
 
 ## Build
 
@@ -28,8 +28,11 @@ team in a gitignored local file. Requires iOS 17+, Xcode and suitable provisioni
 
 Do not reset or re-pair an existing ring just to update this app.
 
-Each morning, open **Ring → Sync ring** to download the recorded night. Opening
-the app refreshes battery/status only; it does not automatically download history.
+Opening the app automatically downloads ring history when a compatible ring and
+saved pairing key are configured. Keep the ring nearby and Bluetooth enabled.
+The loading screen shows real progress, with retry and saved-data recovery.
+**Ring → Sync ring** remains available manually. Sleep belongs to the wake-up date:
+a night beginning October 8 and ending October 9 appears under October 9.
 See [sleep insights and formulas](docs/public/SLEEP.md).
 
 ## Compatibility

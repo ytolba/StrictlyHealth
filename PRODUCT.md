@@ -12,7 +12,7 @@ Oura ring and Apple Watch owners who want an independent everyday health dashboa
 Replace the daily dashboard workflow with local ring Bluetooth data and read-only Apple Health. Account exports are optional historical backfill, not a dependency for live scores or charts.
 
 ## Operating Context
-An iPhone app with ring battery/connection status, manual history sync, daily sleep and activity detail, trends, history and source preferences.
+An iPhone app with ring battery/connection status, foreground automatic history sync with a recoverable loading screen, manual history sync, daily sleep and activity detail, trends, history and source preferences.
 Today is sleep-first, opening separate Sleep, Activity and Recovery pages. Technical explanations remain available through disclosures rather than repeated subtitles.
 
 ## Capabilities and Constraints

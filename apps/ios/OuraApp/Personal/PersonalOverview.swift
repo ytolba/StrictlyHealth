@@ -264,12 +264,34 @@ enum ScoreBand: String {
 }
 
 struct PersonalLaunchView: View {
+    @Environment(\.dynamicTypeSize) private var typeSize
     @ScaledMetric(relativeTo: .title2) private var logoSize = 128.0
+    var message = "Loading saved data…"
+    var failed = false
+    var continueAction: (() -> Void)? = nil
+    var retryAction: (() -> Void)? = nil
     var body: some View {
-        VStack(spacing: 16) {
+        GeometryReader { geometry in
+        ScrollView {
+        VStack(spacing: 20) {
             Image("StrictlyHealthMark").resizable().scaledToFit()
-                .frame(width: logoSize, height: logoSize).accessibilityHidden(true)
-            Text("StrictlyHealth").font(.title2).multilineTextAlignment(.center)
-        }.padding(.horizontal, 24).frame(maxWidth: .infinity, maxHeight: .infinity).background(Color(uiColor: .systemBackground)).accessibilityElement(children: .combine)
+                .frame(width: typeSize.isAccessibilitySize ? 48 : logoSize, height: typeSize.isAccessibilitySize ? 48 : logoSize).accessibilityHidden(true)
+            Text("StrictlyHealth").font(typeSize.isAccessibilitySize ? .headline : .title2).multilineTextAlignment(.center)
+            if !failed { ProgressView().tint(.primary).accessibilityLabel("Sync in progress") }
+            Text(message).font(.body).multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+            if continueAction != nil {
+                VStack(spacing: 12) {
+                    if let retryAction {
+                        Button(action: retryAction) { Text("Try sync again").foregroundStyle(Color(uiColor: .systemBackground)) }.buttonStyle(.borderedProminent).tint(Color(uiColor: .label)).frame(minHeight: 44)
+                    }
+                    if let continueAction {
+                        Button("Continue with saved data", action: continueAction).buttonStyle(.bordered).tint(Color(uiColor: .label)).frame(minHeight: 44)
+                    }
+                    if !failed { Text("Sync continues while the app is open.").font(.callout).foregroundStyle(.primary).multilineTextAlignment(.center) }
+                }.padding(.top, 12)
+            }
+        }.padding(24).frame(maxWidth: .infinity, minHeight: geometry.size.height)
+        }.background(Color(uiColor: .systemBackground))
+        }
     }
 }

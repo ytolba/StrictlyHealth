@@ -474,18 +474,21 @@ final class RingSync: ObservableObject {
     /// when the last sync was interrupted mid-drain, the checkpointed cursor means
     /// data is sitting half-transferred on the ring, so resume eagerly with the
     /// retry loop instead of silently giving up.
-    func syncAutomaticallyIfNeeded(now: Date = Date()) async -> SyncReport? {
+    static func shouldSyncAutomatically(now: Date, successful: Date?, attempted: Date?, incomplete: Bool, paused: Bool, force: Bool) -> Bool {
+        if force { return true }
+        if !paused, let attempted, now.timeIntervalSince(attempted) < 60 { return false }
+        return incomplete || successful.map { now.timeIntervalSince($0) >= automaticSyncCooldown } ?? true
+    }
+
+    func canSyncAutomatically(now: Date = Date(), force: Bool = false) -> Bool {
+        WorkCoordinator.shared.available && !busy && RingGeneration.selected.permitsDirectSync && Keychain.loadKey() != nil &&
+        Self.shouldSyncAutomatically(now: now, successful: lastSuccessfulSyncAt, attempted: lastAutomaticAttemptAt, incomplete: hasIncompleteSync, paused: paused, force: force)
+    }
+
+    func syncAutomaticallyIfNeeded(now: Date = Date(), force: Bool = false) async -> SyncReport? {
+        guard canSyncAutomatically(now: now, force: force) else { return nil }
         guard WorkCoordinator.shared.available, !busy, let key = Keychain.loadKey() else { return nil }
         let resuming = hasIncompleteSync
-        if !resuming,
-           let successful = lastSuccessfulSyncAt,
-           now.timeIntervalSince(successful) < Self.automaticSyncCooldown {
-            return nil
-        }
-        // A failed scan should not immediately restart because scenePhase bounced.
-        if !paused, let attempted = lastAutomaticAttemptAt, now.timeIntervalSince(attempted) < 60 {
-            return nil
-        }
         lastAutomaticAttemptAt = now
         if resuming { status = "Resuming sync…" }
         return await run(keyHex: key,
@@ -779,7 +782,7 @@ final class RingSync: ObservableObject {
             // BLETransport's notification stream is per-connection.
             let t = makeTransport()
             do {
-                try await t.connect()
+                try await t.connect(timeout: source == "automatic" ? 10 : 50)
             } catch {
                 if paused { status = "Sync paused. Return to the app to resume."; return nil }
                 dlog("sync", "BLE connect FAILED: \(error)")

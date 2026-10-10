@@ -180,6 +180,9 @@ struct PersonalDashboard: View {
     @State private var starting = true
     @State private var foregroundRefreshing = false
     @State private var lastForegroundRefresh: Date?
+    @State private var showingOpeningSync = false
+    @State private var openingSyncFailed = false
+    @State private var loadingPhase = "Loading saved data…"
     @State private var tab = 0
     var body: some View {
         TabView(selection: $tab) {
@@ -190,7 +193,15 @@ struct PersonalDashboard: View {
             PersonalSettings(model: model).tabItem { Label("Settings", systemImage: "gearshape") }.tag(3)
         }
         .tint(.teal)
-        .overlay { if starting { PersonalLaunchView().transition(.opacity) } }
+        .accessibilityHidden(starting || showingOpeningSync)
+        .overlay {
+            if starting || showingOpeningSync {
+                PersonalLaunchView(message: loadingMessage, failed: openingSyncFailed,
+                    continueAction: starting ? nil : { showingOpeningSync = false },
+                    retryAction: openingSyncFailed ? { Task { await refreshForeground(force: true) } } : nil)
+                    .accessibilityAddTraits(.isModal)
+            }
+        }
         .task {
             #if DEBUG
             if ProcessInfo.processInfo.arguments.contains("--preview-launch") { return }
@@ -200,21 +211,45 @@ struct PersonalDashboard: View {
             #if DEBUG
             if model.isDemo && ProcessInfo.processInfo.arguments.contains("--preview-sleep-settings") { tab = 3 }
             #endif
-            await refreshForeground()
+            #if DEBUG
+            if model.isDemo && ProcessInfo.processInfo.arguments.contains("--preview-sync") {
+                showingOpeningSync = true
+                openingSyncFailed = ProcessInfo.processInfo.arguments.contains("--preview-sync-error")
+                loadingPhase = openingSyncFailed ? "Your ring wasn’t found. Keep it nearby and check Bluetooth, then try again." : "Downloading ring history…"
+                return
+            }
+            #endif
+            await refreshForeground(force: true)
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active && !starting { Task { await refreshForeground() } }
         }
     }
-    private func refreshForeground() async {
+    private var loadingMessage: String {
+        if foregroundRefreshing && ring.busy && !ring.status.isEmpty { return ring.status }
+        return loadingPhase
+    }
+    private func refreshForeground(force: Bool = false) async {
         guard WorkCoordinator.shared.available else { return }
         guard !foregroundRefreshing else { return }
-        if let lastForegroundRefresh, Date().timeIntervalSince(lastForegroundRefresh) < 15 { return }
+        if !force && !ring.hasIncompleteSync, let lastForegroundRefresh, Date().timeIntervalSince(lastForegroundRefresh) < 15 { return }
         foregroundRefreshing = true; lastForegroundRefresh = Date()
         defer { foregroundRefreshing = false }
-        async let data: Void = model.refresh()
-        if !model.isDemo { await ring.refreshBattery(automatic: true) }
-        await data
+        let shouldSync = !model.isDemo && ring.canSyncAutomatically(force: force)
+        openingSyncFailed = false
+        if shouldSync {
+            showingOpeningSync = true
+            loadingPhase = "Connecting to your Oura ring…"
+            let report = await ring.syncAutomaticallyIfNeeded(force: force)
+            loadingPhase = "Updating your dashboard…"
+            await model.refresh()
+            if report != nil {
+                showingOpeningSync = false
+            } else if scenePhase == .active {
+                openingSyncFailed = true
+                loadingPhase = ring.status.isEmpty ? "Your ring couldn’t sync. Check Bluetooth and keep your ring nearby, then try again." : ring.status
+            } else { showingOpeningSync = false }
+        } else { await model.refresh() }
     }
 }
 struct PersonalTrends: View {

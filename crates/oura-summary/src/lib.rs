@@ -612,6 +612,7 @@ fn pulse_continuation_end(
 /// One sleep the ring analysed and staged: a contiguous `sleep_phase_data` page burst,
 /// placed in time by [`ring_sleep_runs`].
 struct RingSleep {
+    first_page: i64,
     start_ds: i64,
     end_ds: i64,
     captured_unix: i64,
@@ -620,10 +621,9 @@ struct RingSleep {
 
 /// Assemble `sleep_phase_data` pages into analysed sleeps and place them in time.
 ///
-/// Pages arrive as a burst with `header` counting up from zero, so a header that does
-/// not follow the previous one starts a new sleep. A page carries only the `ds` at
-/// which the ring emitted it — writing happens when analysis finishes, i.e. at the end
-/// of the sleep — so a run ends at its last page and runs back at 30 s an epoch.
+/// Pages arrive as a burst with increasing headers. Initially place them at their
+/// emission boundary; `align_ring_sleeps` corrects delayed analysis when independent
+/// bed and summary records agree. Each epoch remains exactly 30 seconds.
 fn ring_sleep_runs(pages: &[(i64, i64, i64, Vec<i64>)]) -> Vec<RingSleep> {
     let epoch_ds = (RING_STAGE_EPOCH_S * 10.0) as i64;
     let mut runs: Vec<RingSleep> = Vec::new();
@@ -636,6 +636,7 @@ fn ring_sleep_runs(pages: &[(i64, i64, i64, Vec<i64>)]) -> Vec<RingSleep> {
                 run.codes.extend_from_slice(codes);
             }
             _ => runs.push(RingSleep {
+                first_page: *page,
                 start_ds: *ds,
                 end_ds: *ds,
                 captured_unix: *captured,
@@ -648,6 +649,46 @@ fn ring_sleep_runs(pages: &[(i64, i64, i64, Vec<i64>)]) -> Vec<RingSleep> {
         run.start_ds = run.end_ds - run.codes.len() as i64 * epoch_ds;
     }
     runs
+}
+
+/// Page timestamps describe analysis, not necessarily wake-up. Use minute offsets
+/// only when a separate, uniquely matching explicit bed record corroborates them.
+/// An incomplete burst, boot mismatch or contradictory summary must not be stretched.
+fn align_ring_sleeps(
+    runs: &mut [RingSleep],
+    beds: &mut [BedPeriod],
+    summaries: &[(i64, i64, i64, i64)], // emission, capture, start offset, end offset
+    unix_s_at: impl Fn(i64, i64) -> f64 + Copy,
+) {
+    for run in runs {
+        if run.first_page != 0 { continue; }
+        let mut candidates = std::collections::BTreeSet::new();
+        for &(emitted, captured, start_offset, end_offset) in summaries {
+            if !(0..=2880).contains(&start_offset) || !(0..start_offset).contains(&end_offset)
+                || (emitted - run.end_ds).abs() > 3000
+                || (unix_s_at(emitted, captured) - unix_s_at(emitted, run.captured_unix)).abs() > EPOCH_ALIGNMENT_SLACK_S {
+                continue;
+            }
+            let (Some(start), Some(end)) = (emitted.checked_sub(start_offset * 600), emitted.checked_sub(end_offset * 600)) else { continue; };
+            for (index, bed) in beds.iter().enumerate() {
+                let epochs = (bed.end_ds - bed.start_ds) / 300;
+                if epochs <= 0 || epochs > 2400 || bed.end_ds > emitted
+                    || (bed.start_ds - start).abs() > 600 || (bed.end_ds - end).abs() > 600
+                    || run.codes.len() < epochs as usize || run.codes.len() - epochs as usize >= 52
+                    || (unix_s_at(bed.end_ds, bed.captured_unix) - unix_s_at(bed.end_ds, run.captured_unix)).abs() > EPOCH_ALIGNMENT_SLACK_S {
+                    continue;
+                }
+                candidates.insert(index);
+            }
+        }
+        if candidates.len() == 1 {
+            let bed = &mut beds[*candidates.first().unwrap()];
+            run.start_ds = bed.start_ds;
+            run.end_ds = bed.end_ds;
+            run.codes.truncate(((bed.end_ds - bed.start_ds) / 300) as usize);
+            bed.staged = true; // Keep the corroborated bed boundary, not signal extensions.
+        }
+    }
 }
 
 /// One `sleep_phase_data` stage epoch, in the codes the rest of the pipeline speaks:
@@ -673,17 +714,8 @@ const RING_STAGE_EPOCH_S: f64 = 30.0;
 /// available with no model at all, and this is what fills the hypnogram in a
 /// model-free build.
 ///
-/// **Placing it in time.** The pages carry no timestamp of their own — their `ds` is
-/// when the ring emitted them, not when you slept. Anchoring the run to END at the
-/// last page's emission and running back at 30 s an epoch was checked against the
-/// ring's independent per-window record for the night in question:
-///
-/// | | median HR | median motion | `sleep_state`=1 |
-/// |---|---|---|---|
-/// | inside the inferred window | 58.5 | 0 | 79% |
-/// | in bed before it | 76.8 | 5 | 20% |
-///
-/// Asleep versus awake-in-bed, from data the hypnogram never touched. The anchor holds.
+/// Page emission may be hours after wake-up. Corroborated bed/summary boundaries
+/// take precedence over emission timing; unknown epochs stay unknown.
 ///
 /// Unanalysed epochs are unknown (0), not evidence of wakefulness. Partial
 /// coverage must not manufacture sleep latency, efficiency or sleep debt.
@@ -1758,6 +1790,7 @@ pub fn build_summary(
     let mut raw_beds: Vec<BedPeriod> = Vec::new();
     let mut sleep_support: Vec<(i64, i64)> = Vec::new();
     let mut ring_hypnogram_pages: Vec<(i64, i64, i64, Vec<i64>)> = Vec::new();
+    let mut ring_sleep_summaries = Vec::new();
     // (ds, sleep_state) straight from the ring: its own asleep/awake call per window.
     let mut ring_sleep_state: Vec<(i64, i64)> = Vec::new();
     let mut pulse_support: Vec<(i64, i64, usize)> = Vec::new();
@@ -1819,6 +1852,13 @@ pub fn build_summary(
                 }
             }
         }
+        if n == "sleep_summary_1" {
+            if let Ok(v) = serde_json::from_str::<Value>(jstr) {
+                if let (Some(start), Some(end)) = (v["start_offset_min"].as_i64(), v["end_offset_min"].as_i64()) {
+                    ring_sleep_summaries.push((*ds, *cu, start, end));
+                }
+            }
+        }
         if matches!(
             n,
             "sleep_acm_period"
@@ -1862,7 +1902,8 @@ pub fn build_summary(
             }
         }
     }
-    let ring_sleeps = ring_sleep_runs(&ring_hypnogram_pages);
+    let mut ring_sleeps = ring_sleep_runs(&ring_hypnogram_pages);
+    align_ring_sleeps(&mut ring_sleeps, &mut raw_beds, &ring_sleep_summaries, unix_s_at);
     raw_beds.extend(beds_from_sleep_signal(
         &raw_beds,
         &ring_sleeps,
@@ -2137,8 +2178,9 @@ pub fn build_summary(
             .unwrap_or_default();
         // smooth once (≈2.5 min window) — used for the displayed hypnogram AND the
         // derived metrics, so the two always agree.
-        let mut full_stages = smooth_stages(&raw_stages, 5);
-        if !full_stages.is_empty()
+        let ring_staged = hyp.and_then(|h| h["source"].as_str()) == Some("ring");
+        let mut full_stages = if ring_staged { raw_stages.clone() } else { smooth_stages(&raw_stages, 5) };
+        if !ring_staged && !full_stages.is_empty()
             && !full_stages.contains(&1)
             && hyp.and_then(|h| h["deep_pct"].as_f64()).unwrap_or(0.0) == 0.0
             && nt.hr_t.len() >= 12
@@ -2819,6 +2861,45 @@ mod tests {
     }
 
     #[test]
+    fn delayed_stage_analysis_uses_corroborated_bed_without_duplicate_night() {
+        let mut beds = vec![bed(0, 8 * 36000)];
+        let pages: Vec<_> = (0..19).map(|page| (12 * 36000 + page, 1, page, vec![2; 52])).collect();
+        let mut runs = ring_sleep_runs(&pages);
+        align_ring_sleeps(&mut runs, &mut beds, &[(12 * 36000, 1, 720, 240)], |ds, _| ds as f64 / 10.0);
+        assert_eq!((runs[0].start_ds, runs[0].end_ds), (0, 8 * 36000));
+        assert_eq!(runs[0].codes.len(), 960);
+        assert!(beds[0].staged);
+        assert!(beds_from_sleep_signal(&beds, &runs, &[], &[], |ds, _| ds as f64 / 10.0).is_empty());
+    }
+
+    #[test]
+    fn stage_alignment_rejects_missing_head_conflicts_and_other_boots() {
+        for case in 0..5 {
+            let mut beds = vec![bed(0, 36000)];
+            let mut runs = vec![RingSleep { first_page: if case == 0 { 1 } else { 0 }, start_ds: 60000, end_ds: 96000, captured_unix: 1, codes: vec![2; if case == 4 { 119 } else { 120 }] }];
+            let summaries = match case {
+                1 => vec![],
+                2 => vec![(96000, 1, 150, 100)],
+                3 => vec![(96000, 86401, 160, 100)],
+                _ => vec![(96000, 1, 160, 100)],
+            };
+            align_ring_sleeps(&mut runs, &mut beds, &summaries, |ds, cu| ds as f64 / 10.0 + cu as f64);
+            assert_eq!(runs[0].start_ds, 60000, "case {case}");
+            assert!(!beds[0].staged);
+        }
+    }
+
+    #[test]
+    fn aligned_ring_stages_preserve_unknown_and_awake_epochs() {
+        let mut beds = vec![bed(0, 36000)];
+        let mut codes = vec![2; 120]; codes[0] = 0; codes[1] = 4; codes[2] = 3;
+        let mut runs = vec![RingSleep { first_page: 0, start_ds: 60000, end_ds: 96000, captured_unix: 1, codes: codes.clone() }];
+        align_ring_sleeps(&mut runs, &mut beds, &[(96000, 1, 160, 100)], |ds, _| ds as f64 / 10.0);
+        assert_eq!(runs[0].codes, codes);
+        assert_eq!(runs[0].start_ds, 0);
+    }
+
+    #[test]
     fn identical_relative_starts_in_different_boots_keep_distinct_hypnograms() {
         let nights = [
             Night {
@@ -2836,12 +2917,14 @@ mod tests {
         ];
         let runs = [
             RingSleep {
+                first_page: 0,
                 start_ds: 0,
                 end_ds: 36000,
                 captured_unix: 1,
                 codes: vec![1; 120],
             },
             RingSleep {
+                first_page: 0,
                 start_ds: 0,
                 end_ds: 36000,
                 captured_unix: 86401,
@@ -2866,6 +2949,7 @@ mod tests {
             ..Default::default()
         };
         let run = RingSleep {
+            first_page: 0,
             start_ds: 4 * 36000,
             end_ds: 8 * 36000,
             captured_unix: 1,
@@ -2899,6 +2983,7 @@ mod tests {
         let mut codes = vec![4; 120];
         codes.extend(vec![2; 840]);
         let run = RingSleep {
+            first_page: 0,
             start_ds: 0,
             end_ds: 8 * 36000,
             captured_unix: 1,
@@ -2926,6 +3011,7 @@ mod tests {
             ..Default::default()
         };
         let run = RingSleep {
+            first_page: 0,
             start_ds: 0,
             end_ds: 36000,
             captured_unix: 86401,
@@ -3602,4 +3688,3 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
-

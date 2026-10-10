@@ -214,13 +214,14 @@ enum PersonalAssembler {
         let start = Date(timeIntervalSince1970: Double(startUnix)), end = Date(timeIntervalSince1970: Double(endUnix))
         // Only ring-emitted stages enter recovery; upstream also offers unvalidated signal estimates.
         let codes = n.staging_source == "ring" ? (n.hypnogram ?? []) : []
-        let epoch = end.timeIntervalSince(start) / Double(max(1, codes.count))
+        let epoch = 30.0 // Ring epochs are measurements, never stretched to fit a bed window.
         let stages = codes.enumerated().compactMap { index, code -> PersonalStage? in
-            guard (1...4).contains(code) else { return nil }
-            return PersonalStage(start: start.addingTimeInterval(Double(index) * epoch), end: start.addingTimeInterval(Double(index + 1) * epoch), label: ["", "Deep", "Core", "REM", "Awake"][code])
+            let at = start.addingTimeInterval(Double(index) * epoch)
+            guard (1...4).contains(code), at < end else { return nil }
+            return PersonalStage(start: at, end: min(end, at.addingTimeInterval(epoch)), label: ["", "Deep", "Core", "REM", "Awake"][code])
         }
         // Time in bed is not sleep duration. Missing/incomplete staging remains unavailable.
-        let complete = !codes.isEmpty && n.stagingComplete && (n.staging_coverage_pct ?? 100) >= 95
+        let complete = !codes.isEmpty && n.stagingComplete && codes.allSatisfy { (1...4).contains($0) } && abs(Double(codes.count) * epoch - end.timeIntervalSince(start)) < epoch && (n.staging_coverage_pct ?? 100) >= 95
         let hours = complete ? Double(codes.filter { (1...3).contains($0) }.count) * epoch / 3600 : nil
         let restorative = complete ? Double(codes.filter { $0 == 1 || $0 == 3 }.count) * epoch / 3600 : nil
         let hr = (n.series_t?.hr ?? []).compactMap { pair -> PersonalPoint? in

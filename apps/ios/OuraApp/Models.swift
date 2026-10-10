@@ -218,8 +218,31 @@ struct ClockEpoch: Codable {
 struct ClockDiag: Codable {
     var epochs: [ClockEpoch] = []
     var warnings: [String] = []
-    var undated_reasons: [String: Int]? = nil
+    var undated_reasons: [ClockUndatedReason] = []
     var undated_nights: [UndatedNight] = []
+    enum CodingKeys: String, CodingKey { case epochs, warnings, undated_reasons, undated_nights }
+    init() {}
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        epochs = try c.decodeIfPresent([ClockEpoch].self, forKey: .epochs) ?? []
+        warnings = try c.decodeIfPresent([String].self, forKey: .warnings) ?? []
+        undated_nights = try c.decodeIfPresent([UndatedNight].self, forKey: .undated_nights) ?? []
+        if !c.contains(.undated_reasons) { return }
+        if try c.decodeNil(forKey: .undated_reasons) { return }
+        if let reasons = try? c.decode([ClockUndatedReason].self, forKey: .undated_reasons) {
+            undated_reasons = reasons
+        } else {
+            let legacy = try c.decode([String: Int].self, forKey: .undated_reasons)
+            undated_reasons = legacy.keys.sorted().map { ClockUndatedReason(reason: $0, count: legacy[$0]) }
+        }
+    }
+}
+struct ClockUndatedReason: Codable {
+    var reason: String?
+    var count: Int?
+    var recoverable: Bool? = nil
+    var message: String? = nil
+    var span_h: Double? = nil
 }
 struct UndatedNight: Codable {
     var start_ds: Int64?; var end_ds: Int64?; var in_bed_h: Double?
@@ -598,5 +621,3 @@ enum BedtimeOverrideStore {
         try write(map, dbPath: dbPath)
     }
 }
-
-
