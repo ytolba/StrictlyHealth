@@ -41,8 +41,8 @@ See [sleep insights and formulas](docs/public/SLEEP.md).
 
 ## Preview
 
-These product visuals show the Youra interface with synthetic sample values. They
-are illustrative mockups, not screenshots or records from a real person's account.
+These edited examples use synthetic dates, measurements, and chart traces. They
+are illustrative, not live data or records from anyone's account.
 
 ![Youra Today dashboard with sample data](docs/images/youra-today-sample.png)
 
