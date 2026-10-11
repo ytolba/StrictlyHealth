@@ -28,6 +28,10 @@ apps/ios/.libtorch-frameworks-build/
 apps/ios/OuraApp/build/
 apps/ios/build/
 apps/ios/DerivedData/
+apps/ios/generated/oura_core.swift
+apps/ios/generated/oura_coreFFI.h
+apps/ios/generated/oura_coreFFI.modulemap
+apps/ios/generated/headers/oura_coreFFI.h
 local/
 
 # Runtime state the CLI writes next to the DB (personal profile, ring feature modes).

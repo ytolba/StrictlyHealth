@@ -1,13 +1,17 @@
-# StrictlyHealth
+# Youra
 
 Your ring. Your watch. Your data.
 
 An independent, local-first iPhone dashboard for Oura ring records and read-only
-Apple Health data. Built with SwiftUI, Swift Charts and Rust. No app backend,
+Apple Health data. Built with SwiftUI, Swift Charts and Rust. No required app backend,
 Oura API subscription, proprietary model download or bundled health database.
 
 ## Features
 
+- A local morning brief, inspectable habit/workout/schedule comparisons, and timestamp-aware overnight heart-rate summaries. Missing data stays unknown; comparisons are associations, not causal or medical claims.
+- Private English voice check-ins, with typed fallback and editable confirmation before saving. Microphone audio is never uploaded or retained.
+- Optional spoken conversations with your own HTTPS Hermes server. Preview each message and selected context before Send; no shared hosted AI service. [Setup and privacy](docs/public/HERMES.md).
+- Optional daily Oura-only iMessage sleep brief through your own Hermes + Photon setup, scheduled from the ring’s recorded wake time. It stays off until explicitly enabled; late or incomplete syncs are skipped. [Setup and privacy](docs/public/HERMES.md).
 - Battery and supported ring history over Bluetooth with your own key.
 - Oura and Apple Watch measurements without double-counting activity or mixing HRV methods.
 - Actual sleep stages, sleep/wake times, deep/REM/core durations, recorded awakenings and overnight physiology when available.
@@ -52,7 +56,7 @@ This is experimental software, not a medical device.
 
 ## Privacy and release
 
-Health records stay on the iPhone; keys use device-only Keychain storage. Device
+Health records and confirmed check-ins stay on the iPhone by default; keys use device-only Keychain storage. Manual Hermes chats send only reviewed text and selected summaries. If a user enables the optional daily message, direct Oura sleep facts go over the user’s private tailnet to their Mac and the selected Hermes model; cloud model providers may retain data or charge, while a local model keeps inference on-device to that Mac. Device
 backups, manual exports and diagnostics may still contain sensitive data. Read
 [the release checklist](docs/public/RELEASING.md) and use the curated source
 packager before uploading anything. Never post pairing keys, health exports,
@@ -62,3 +66,7 @@ Based on [Open Health](https://github.com/Th0rgal/open_health) and
 [Open Oura](https://github.com/Th0rgal/open_oura). Cracked-Oura is a visual/workflow
 reference, not copied frontend code or a bundled dependency.
 [Third-party notices](THIRD_PARTY_NOTICES.md) · [MIT license](LICENSE).
+
+The repository URL remains `ytolba/StrictlyHealth` for existing users. App identity
+is now Youra; upgrading does not require a reset, re-pairing, or a new bundle ID.
+Youra is independent and is not affiliated with Oura or Apple.

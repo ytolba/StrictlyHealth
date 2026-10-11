@@ -9,7 +9,7 @@ options:
 settings:
   base:
     MARKETING_VERSION: "0.1.1"
-    CURRENT_PROJECT_VERSION: "50"
+    CURRENT_PROJECT_VERSION: "51"
     PRODUCT_BUNDLE_IDENTIFIER: "$(APP_BUNDLE_ID)"
     TARGETED_DEVICE_FAMILY: "1"   # iPhone only (no iPad multitasking orientation reqs)
     CODE_SIGN_STYLE: Automatic
@@ -63,6 +63,8 @@ targets:
       - path: Assets.xcassets
     dependencies:
       - sdk: HealthKit.framework
+      - sdk: Speech.framework
+      - sdk: AVFoundation.framework
       - framework: ../OuraCore.xcframework
         embed: false
 

@@ -4,8 +4,8 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 REPO="$PWD"
 mkdir -p "$REPO/release"
-BUNDLE=$(mktemp -d "$REPO/release/OpenHealth.XXXXXX")
-mkdir -p "$BUNDLE/apps/ios/OuraApp" "$BUNDLE/apps/ios/generated/headers" "$BUNDLE/crates" "$BUNDLE/vendor" "$BUNDLE/tools" "$BUNDLE/docs" "$BUNDLE/.github/workflows"
+BUNDLE=$(mktemp -d "$REPO/release/Youra.XXXXXX")
+mkdir -p "$BUNDLE/apps/ios/OuraApp" "$BUNDLE/apps/ios/generated/headers" "$BUNDLE/crates" "$BUNDLE/vendor" "$BUNDLE/tools/morning-brief" "$BUNDLE/docs" "$BUNDLE/.github/workflows"
 cp Cargo-public.toml "$BUNDLE/Cargo.toml"
 cp LICENSE README.md THIRD_PARTY_NOTICES.md .gitignore "$BUNDLE/"
 cp -R crates/oura-core crates/oura-summary "$BUNDLE/crates/"
@@ -14,6 +14,7 @@ cp -R docs/public "$BUNDLE/docs/"
 cp apps/ios/build-xcframework.sh "$BUNDLE/apps/ios/"
 cp apps/ios/generated/headers/module.modulemap "$BUNDLE/apps/ios/generated/headers/"
 cp tools/check-public.py tools/package-public.sh "$BUNDLE/tools/"
+cp tools/morning-brief/install.py tools/morning-brief/server.py tools/morning-brief/test_server.py "$BUNDLE/tools/morning-brief/"
 cp Cargo-public.toml "$BUNDLE/Cargo-public.toml"
 cp .github/workflows/public-ios.yml "$BUNDLE/.github/workflows/"
 APP="$REPO/apps/ios/OuraApp"

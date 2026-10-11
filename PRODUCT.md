@@ -1,4 +1,4 @@
-# StrictlyHealth
+# Youra
 
 <!-- impeccable:product-schema 1 -->
 
@@ -20,7 +20,7 @@ Use direct Bluetooth Oura sleep by default, without silent Apple Health substitu
 
 ## Brand Commitments
 User requested an Oura-influenced native experience with an independent twist, rich data charts, colored scores and Apple Health integration. Preserve familiar iPhone navigation and accessibility.
-App-facing identity is StrictlyHealth with an original SH monogram; preserve the existing bundle identifier and local data during branding updates.
+App-facing identity is Youra with an original ivory branching mark on charcoal and adaptive icy-blue tint. Preserve native navigation, semantic surfaces, score colors, bundle identifier, pairing keys and local history. The public GitHub URL remains StrictlyHealth.
 
 ## Evidence on Hand
 Existing SwiftUI app and synthetic dashboard fixtures. One Gen 3 ring sync has been verified; other generations and complete overnight data coverage remain limited evidence. Synthetic screenshots are labeled. No clinical validation of custom scores exists.
@@ -30,4 +30,5 @@ Existing SwiftUI app and synthetic dashboard fixtures. One Gen 3 ring sync has b
 - One selected source per measurement, with explicit fallback and provenance.
 - Explain formulas and distinguish estimates from measurements.
 - Keep health records and keys local.
+- Local voice check-ins need confirmation before saving. Manual Hermes requests need preview and explicit Send. The daily iMessage feature is opt-in, sends only complete direct-Bluetooth Oura sleep summaries to the user's own restricted Hermes profile, and never uploads audio, identifiers, raw samples, or journal entries.
 - Smooth interaction, native accessibility and honest missing-data states.

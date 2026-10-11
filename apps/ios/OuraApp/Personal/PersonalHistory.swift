@@ -2,10 +2,16 @@ import SwiftUI
 
 struct PersonalHistory: View {
     @ObservedObject var model: PersonalDashboardModel
+    var embedded = false
     @State private var selection = Date()
     private var selected: PersonalDay? { model.days.first { Calendar.current.isDate($0.date, inSameDayAs: selection) } }
     var body: some View {
-        NavigationStack {
+        Group {
+            if embedded { historyList.navigationTitle("History").navigationBarTitleDisplayMode(.inline) }
+            else { NavigationStack { historyList.navigationTitle("History") } }
+        }
+    }
+    private var historyList: some View {
             List {
                 DatePicker("Date", selection: $selection, in: ...Date(), displayedComponents: .date)
                 if let day = selected {
@@ -30,8 +36,7 @@ struct PersonalHistory: View {
                         Button(day.date.formatted(date: .abbreviated, time: .omitted)) { selection = day.date }
                     }
                 }
-            }.navigationTitle("History")
-        }
+            }
     }
 }
 

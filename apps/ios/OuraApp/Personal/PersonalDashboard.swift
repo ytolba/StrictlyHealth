@@ -14,6 +14,14 @@ import UniformTypeIdentifiers
     @Published var lastRefresh: Date?
     @Published var archiveCount = 0
     @Published var importStatus = ""
+    @Published private(set) var journal: [HabitEntry] = []
+    @Published private(set) var insights = YouraInsightSnapshot()
+    @Published var journalStatus = ""
+    @Published private(set) var journalSaving = false
+    @Published private(set) var dailyBriefStatus = ""
+    private let journalStore = YouraJournalStore()
+    private var journalLoaded = false
+    private var insightRevision = 0
     let health = PersonalHealthReader()
     private var cache: PersonalCacheWorker?
     private var authorized = UserDefaults.standard.bool(forKey: "personal.health.connected")
@@ -36,10 +44,16 @@ import UniformTypeIdentifiers
             if ProcessInfo.processInfo.arguments.contains("--demo-watch-sleep") { preferences.sleepInput = .watch }
             #endif
             days = DashboardDemo.days()
+            journal = days.enumerated().flatMap { index, day in
+                YouraHabit.allCases.map { HabitEntry(nightDate: day.date, habit: $0, answer: index % 3 == 0 ? .yes : .no) }
+            }
+            journalLoaded = true
             await prepareLive()
             status = "Demo · synthetic data. No HealthKit or ring connection; demo records are never saved."
             return
         }
+        do { journal = try await journalStore.load(); journalLoaded = true }
+        catch { journalStatus = "Your journal couldn’t be read. Existing files are preserved; saving is disabled until storage recovers." }
         do {
             let saved = try await cache!.load()
             days = saved.days
@@ -128,6 +142,49 @@ import UniformTypeIdentifiers
         let snapshot = await Task.detached(priority: .utility) { PersonalLiveSnapshot.build(stored, preferences: preferences, goals: goals) }.value
         guard revision == presentationRevision else { return }
         live = snapshot
+        await prepareInsights()
+    }
+    private func prepareInsights() async {
+        insightRevision += 1; let revision = insightRevision
+        let days = live.days, entries = journal
+        let built = await Task.detached(priority: .utility) { YouraInsights.build(days: days, entries: entries) }.value
+        guard revision == insightRevision else { return }
+        insights = built
+    }
+    func sendDailyBriefAfterOuraSync() async {
+        guard !isDemo, UserDefaults.standard.bool(forKey: "youra.dailyBrief.enabled") else { return }
+        let candidates = live.days.compactMap { day -> (Date, PersonalNight)? in
+            let night = day.directRingNight ?? (day.night?.isDirectRing == true ? day.night : nil)
+            guard let night, night.isDirectRing, YouraInsights.valid(night),
+                  let wake = night.asleepEnd, wake <= Date(), Date().timeIntervalSince(wake) < 24 * 3600 else { return nil }
+            return (day.date, night)
+        }
+        guard let (date, night) = candidates.max(by: { ($0.1.asleepEnd ?? .distantPast) < ($1.1.asleepEnd ?? .distantPast) }) else {
+            dailyBriefStatus = "No complete direct Oura night is ready. No message was sent."
+            UserDefaults.standard.set(dailyBriefStatus, forKey: "youra.dailyBrief.status")
+            return
+        }
+        let server = UserDefaults.standard.string(forKey: "youra.hermes.url") ?? ""
+        let token = HermesCredential.load() ?? ""
+        do {
+            let delivery = try await YouraDailyBriefClient().schedule(server: server, token: token, nightDate: date, night: night)
+            dailyBriefStatus = "Oura night queued for \(delivery.formatted(date: .omitted, time: .shortened))."
+        } catch {
+            dailyBriefStatus = error.localizedDescription
+        }
+        UserDefaults.standard.set(dailyBriefStatus, forKey: "youra.dailyBrief.status")
+    }
+    func saveJournal(_ draft: VoiceJournalDraft) async -> Bool {
+        guard journalLoaded, !journalSaving else { journalStatus = "Journal storage is unavailable or still saving. Try again shortly."; return false }
+        journalSaving = true
+        defer { journalSaving = false }
+        var merged = journal.filter { !Calendar.current.isDate($0.nightDate, inSameDayAs: draft.nightDate) }
+        merged += draft.entries.map { entry in var e = entry; e.nightDate = Calendar.current.startOfDay(for: draft.nightDate); return e }
+        do {
+            if !isDemo { try await journalStore.save(merged) }
+            journal = merged; journalStatus = isDemo ? "Demo check-in confirmed for this session only." : "Check-in saved on this iPhone."
+            await prepareInsights(); return true
+        } catch { journalStatus = "Couldn’t save this check-in. Existing entries are unchanged. Try again."; return false }
     }
     func importArchive(_ urls: [URL]) async {
         guard !isDemo else { return }
@@ -188,11 +245,10 @@ struct PersonalDashboard: View {
         TabView(selection: $tab) {
             PersonalOverview(model: model, ring: ring, openRing: { tab = 2 }, openSettings: { tab = 3 }).tabItem { Label("Today", systemImage: "heart.text.square") }.tag(0)
             PersonalTrends(model: model).tabItem { Label("Trends", systemImage: "chart.xyaxis.line") }.tag(1)
-            PersonalHistory(model: model).tabItem { Label("History", systemImage: "calendar") }.tag(4)
             PersonalRing(model: model, ring: ring).tabItem { Label("Ring", systemImage: "circle.circle") }.tag(2)
             PersonalSettings(model: model).tabItem { Label("Settings", systemImage: "gearshape") }.tag(3)
         }
-        .tint(.teal)
+        .tint(YouraStyle.tint)
         .accessibilityHidden(starting || showingOpeningSync)
         .overlay {
             if starting || showingOpeningSync {
@@ -244,6 +300,7 @@ struct PersonalDashboard: View {
             loadingPhase = "Updating your dashboard…"
             await model.refresh()
             if report != nil {
+                await model.sendDailyBriefAfterOuraSync()
                 showingOpeningSync = false
             } else if scenePhase == .active {
                 openingSyncFailed = true
@@ -259,6 +316,10 @@ struct PersonalTrends: View {
     var body: some View {
         NavigationStack {
             List {
+                Section {
+                    NavigationLink { YouraPatternsView(model: model) } label: { Label("Your patterns", systemImage: "point.3.connected.trianglepath.dotted") }
+                    NavigationLink { PersonalHistory(model: model, embedded: true) } label: { Label("Sleep & health history", systemImage: "calendar") }
+                }
                 Picker("Metric", selection: $metric) {
                     ForEach(PersonalMetric.allCases) { Text($0.title).tag($0) }
                 }
@@ -346,6 +407,9 @@ struct PersonalSettings: View {
         NavigationStack {
             ScrollViewReader { scroll in
             Form {
+                Section("Youra") {
+                    NavigationLink { YouraHermesSettings(onDailyBriefEnabled: { await model.sendDailyBriefAfterOuraSync() }) } label: { Label("AI & Messages", systemImage: "waveform") }
+                }
                 Section("Apple Health") {
                     Button("Connect or review Apple Health access") { Task { await model.connectHealth() } }.disabled(model.refreshing || model.isDemo)
                     Text("Read-only access. Apple Watch records appear through Apple Health; no separate Bluetooth pairing is needed. HealthKit does not disclose read denial.").font(.footnote).foregroundStyle(.secondary)
@@ -383,7 +447,8 @@ struct PersonalSettings: View {
                     Text("Weights normalize automatically. Baselines use the preceding 30 calendar days and require 14 comparable measurements per component. HRV methods and device identities stay separate.").font(.footnote)
                 }
                 Section("Privacy") {
-                    Text("Read-only Apple Health. Ring records and daily summaries are stored on this iPhone. No app account, backend, API subscription, or iCloud synchronization.")
+                    Text("Read-only Apple Health. Ring records, daily summaries and confirmed check-ins are stored on this iPhone. No app account, required backend, or iCloud synchronization.")
+                    Text("Optional Hermes chats send only the text and context you review before Send. If enabled in AI & Messages, a daily iMessage sends only a complete direct Bluetooth Oura sleep summary to your configured Hermes server and existing Photon channel. Your server or model provider may retain submitted text and charge for processing. Microphone audio is never sent.").font(.footnote)
                     Text("Device backups may include local health files. Diagnostics and manual exports can contain health data.").font(.footnote).foregroundStyle(.secondary)
                 }
             }.navigationTitle("Settings")
@@ -449,7 +514,10 @@ struct PersonalRing: View {
                     Text("Use the existing pairing key for your ring. A new random key will not authenticate an already-onboarded ring.").font(.footnote)
                     Button("Sync ring") {
                         Task {
-                            if await ring.run(keyHex: key) != nil { await model.refresh() }
+                            if await ring.run(keyHex: key) != nil {
+                                await model.refresh()
+                                await model.sendDailyBriefAfterOuraSync()
+                            }
                         }
                     }.disabled(ring.busy || model.refreshing || !selectedGeneration.permitsDirectSync)
                     Button("Pair a factory-reset ring") {
@@ -464,7 +532,10 @@ struct PersonalRing: View {
                                 guard let newKey else { return }
                                 // A successful pairing saves the only copy to this iPhone's
                                 // device-only Keychain before returning.
-                                if await ring.run(keyHex: newKey) != nil { await model.refresh() }
+                                if await ring.run(keyHex: newKey) != nil {
+                                    await model.refresh()
+                                    await model.sendDailyBriefAfterOuraSync()
+                                }
                             }
                         }
                         Button("Cancel", role: .cancel) { }

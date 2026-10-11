@@ -31,6 +31,8 @@ struct PersonalOverview: View {
     @State private var previewSleepReport = false
     @State private var previewLiveCharts = false
     @State private var selectedScore: PersonalScoreKind?
+    @State private var showingTalk = false
+    @State private var showingPatterns = false
     @AppStorage("dashboard.metrics") private var selection = DashboardSelection.initial
     private var day: PersonalDay? { model.live.byDate[Calendar.current.startOfDay(for: date)] }
     private var scores: PersonalDailyScores? { model.live.scores[Calendar.current.startOfDay(for: date)] }
@@ -70,6 +72,7 @@ struct PersonalOverview: View {
                         Button("Connect Apple Health", systemImage: "heart.fill") { Task { await model.connectHealth() } }.disabled(model.refreshing)
                         Button("Set up ring", systemImage: "circle.circle", action: openRing)
                     }
+                    intelligence
                 } else if let day {
                     Section {
                         Button { selectedScore = .sleep } label: {
@@ -93,15 +96,11 @@ struct PersonalOverview: View {
                                 if let night = day.night {
                                     if night.isDirectRing && night.hours == nil { Text("Oura records received; sleep stages are missing or incomplete.").font(.subheadline) }
                                     Text("\(night.asleepStart.map { $0.formatted(date: .omitted, time: .shortened) } ?? "Onset unknown") → \(night.asleepEnd.map { $0.formatted(date: .omitted, time: .shortened) } ?? "Wake unknown")").font(.subheadline).monospacedDigit()
-                                    PersonalSleepEssentials(night: night)
-                                    if let prepared = model.live.nights[day.date], !prepared.stages.isEmpty {
-                                        PersonalStageChart(night: night, stages: prepared.stages, compact: true, interactive: false)
-                                    } else { Text("Sleep stages unavailable").font(.caption).foregroundStyle(.secondary) }
-                                    Text(PersonalDisplay.sleepStory(night, goal: model.goals.sleepHours)).font(.subheadline).foregroundStyle(.secondary)
                                 } else { Text(day.sleepUnavailableMessage).font(.subheadline) }
                             }.padding(.vertical, 8).contentShape(Rectangle())
                         }.buttonStyle(.plain).accessibilityHint("Opens sleep timing, stages and overnight measurements")
                     }
+                    intelligence
                     if day.night == nil, model.preferences.resolvedSleepInput == .directRing {
                         Button("Sync Oura ring", systemImage: "arrow.triangle.2.circlepath", action: openRing)
                     }
@@ -139,12 +138,11 @@ struct PersonalOverview: View {
             .listSectionSpacing(.compact)
             .refreshable { await model.refresh() }
             .toolbar {
-                ToolbarItemGroup(placement: .topBarTrailing) {
-                    PersonalRingHeader(ring: ring, openRing: openRing)
-                    Button("Customize", systemImage: "slider.horizontal.3") { editing = true }
-                }
+                ToolbarItem(placement: .topBarTrailing) { PersonalRingHeader(ring: ring, openRing: openRing) }
             }
             .sheet(isPresented: $editing) { measurementEditor }
+            .sheet(isPresented: $showingTalk) { YouraTalkView(model: model, date: date) }
+            .navigationDestination(isPresented: $showingPatterns) { YouraPatternsView(model: model) }
             .navigationDestination(isPresented: $previewSleepReport) {
                 if let day { PersonalSleepReport(day: day, summary: scores, charts: model.live.nights[day.date], days: week, goals: model.goals) }
             }
@@ -165,8 +163,35 @@ struct PersonalOverview: View {
                 if model.isDemo && ProcessInfo.processInfo.arguments.contains("--preview-live-charts"), day != nil { previewLiveCharts = true }
                 if model.isDemo && ProcessInfo.processInfo.arguments.contains("--preview-activity"), day != nil { selectedScore = .activity }
                 if model.isDemo && ProcessInfo.processInfo.arguments.contains("--preview-recovery"), day != nil { selectedScore = .recovery }
+                if model.isDemo && ProcessInfo.processInfo.arguments.contains("--preview-patterns") { showingPatterns = true }
+                if model.isDemo && ProcessInfo.processInfo.arguments.contains("--preview-talk") { showingTalk = true }
                 #endif
             }
+        }
+    }
+    private var intelligence: some View {
+        Section {
+            YouraMorningBrief(insights: model.insights)
+            Button { showingTalk = true } label: {
+                Label("Talk to Youra", systemImage: "waveform")
+                    .font(.body.weight(.semibold))
+                    .frame(maxWidth: .infinity, minHeight: 46, alignment: .leading)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            Button { showingPatterns = true } label: {
+                HStack {
+                    Label("Patterns", systemImage: "point.3.connected.trianglepath.dotted")
+                        .font(.subheadline)
+                    Spacer(minLength: 8)
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.tertiary)
+                }
+                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
         }
     }
     private func moveDate(_ amount: Int) { date = Calendar.current.date(byAdding: .day, value: amount, to: date) ?? date }
@@ -205,7 +230,7 @@ struct PersonalOverview: View {
             }.environment(\.editMode, .constant(.active))
                 .navigationTitle("Your overview").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { editing = false } } }
-        }.tint(.teal)
+        }.tint(YouraStyle.tint)
     }
 }
 
@@ -265,33 +290,43 @@ enum ScoreBand: String {
 
 struct PersonalLaunchView: View {
     @Environment(\.dynamicTypeSize) private var typeSize
-    @ScaledMetric(relativeTo: .title2) private var logoSize = 128.0
+    @ScaledMetric(relativeTo: .largeTitle) private var logoSize = 96.0
     var message = "Loading saved data…"
     var failed = false
     var continueAction: (() -> Void)? = nil
     var retryAction: (() -> Void)? = nil
     var body: some View {
         GeometryReader { geometry in
-        ScrollView {
-        VStack(spacing: 20) {
-            Image("StrictlyHealthMark").resizable().scaledToFit()
-                .frame(width: typeSize.isAccessibilitySize ? 48 : logoSize, height: typeSize.isAccessibilitySize ? 48 : logoSize).accessibilityHidden(true)
-            Text("StrictlyHealth").font(typeSize.isAccessibilitySize ? .headline : .title2).multilineTextAlignment(.center)
-            if !failed { ProgressView().tint(.primary).accessibilityLabel("Sync in progress") }
-            Text(message).font(.body).multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
-            if continueAction != nil {
-                VStack(spacing: 12) {
-                    if let retryAction {
-                        Button(action: retryAction) { Text("Try sync again").foregroundStyle(Color(uiColor: .systemBackground)) }.buttonStyle(.borderedProminent).tint(Color(uiColor: .label)).frame(minHeight: 44)
+            ScrollView {
+                VStack(spacing: 18) {
+                    Image("StrictlyHealthMark").resizable().scaledToFit()
+                        .frame(width: typeSize.isAccessibilitySize ? 64 : logoSize, height: typeSize.isAccessibilitySize ? 64 : logoSize)
+                        .accessibilityHidden(true)
+                    Text("Youra").font(.largeTitle.weight(.semibold)).multilineTextAlignment(.center)
+                    if !failed { ProgressView().controlSize(.regular).tint(YouraStyle.tint).accessibilityLabel("Sync in progress") }
+                    Text(message).font(.callout).foregroundStyle(.white.opacity(0.76))
+                        .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+                    if continueAction != nil {
+                        VStack(spacing: 10) {
+                            if let retryAction {
+                                Button("Try sync again", systemImage: "arrow.clockwise", action: retryAction)
+                                    .buttonStyle(.borderedProminent).tint(YouraStyle.tint).frame(minHeight: 44)
+                            }
+                            if let continueAction {
+                                Button("Continue with saved data", action: continueAction)
+                                    .buttonStyle(.bordered).tint(.white).frame(minHeight: 44)
+                            }
+                            if !failed {
+                                Text("Sync continues while Youra is open.").font(.footnote)
+                                    .foregroundStyle(.white.opacity(0.68)).multilineTextAlignment(.center)
+                            }
+                        }.padding(.top, 8)
                     }
-                    if let continueAction {
-                        Button("Continue with saved data", action: continueAction).buttonStyle(.bordered).tint(Color(uiColor: .label)).frame(minHeight: 44)
-                    }
-                    if !failed { Text("Sync continues while the app is open.").font(.callout).foregroundStyle(.primary).multilineTextAlignment(.center) }
-                }.padding(.top, 12)
+                }
+                .foregroundStyle(Color(red: 0.96, green: 0.96, blue: 0.93))
+                .padding(28).frame(maxWidth: .infinity, minHeight: geometry.size.height)
             }
-        }.padding(24).frame(maxWidth: .infinity, minHeight: geometry.size.height)
-        }.background(Color(uiColor: .systemBackground))
+            .background(YouraStyle.launchBackground.ignoresSafeArea())
         }
     }
 }

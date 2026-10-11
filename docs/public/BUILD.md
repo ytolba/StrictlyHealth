@@ -1,10 +1,10 @@
-# Build StrictlyHealth
+# Build Youra
 
 ## Prerequisites
 
 A Mac, Xcode with an iOS SDK, Rust/rustup, XcodeGen, and an iPhone running iOS 17+.
-The public app uses no proprietary model files, seeded health database, Oura API
-credentials, server account or backend. All required patched Rust sources are in
+The public app requires no proprietary model files, seeded health database, Oura API
+credentials, server account or backend. Optional Hermes uses your own server. All required patched Rust sources are in
 this repository; a sibling `open_oura` checkout is no longer required.
 
 ```sh
@@ -82,6 +82,20 @@ Score colors use this app's presentation bands: High (85+), Moderate (70–84), 
 
 See [compatibility](COMPATIBILITY.md) before pairing, and
 [release checks](RELEASING.md) before publishing.
+
+## Voice and patterns
+
+Tap **Today → Talk to Youra → Check-in**. Record a short English turn or type;
+review the wake-up date, each Yes/No/Unknown answer, and optional event times,
+then Save. Missing answers are never interpreted as No. You can edit a saved date.
+Speech uses local recognition only; unsupported devices/languages and denied
+permissions have a typed fallback. There is no automatic network transcription.
+
+**Today → Your patterns** and **Trends → Your patterns** show comparisons and
+their supporting nights. See [insight formulas](INSIGHTS.md). The morning brief
+uses the latest valid night and explicitly dates it, including when it is older.
+Use [the Hermes guide](HERMES.md) for optional spoken explanations. No AI setup
+is needed for measurements, check-ins, patterns, or the morning brief.
 
 ## Tests
 

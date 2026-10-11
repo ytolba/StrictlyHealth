@@ -5,13 +5,13 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-	<string>StrictlyHealth</string>
+	<string>Youra</string>
 	<key>CFBundleExecutable</key>
 	<string>OuraApp</string>
 	<key>CFBundleIdentifier</key>
 	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 	<key>CFBundleName</key>
-	<string>StrictlyHealth</string>
+	<string>Youra</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -29,11 +29,15 @@
 		<string>bluetooth-central</string>
 	</array>
 	<key>NSBluetoothAlwaysUsageDescription</key>
-	<string>StrictlyHealth connects to your Oura ring over Bluetooth to read your health data on-device.</string>
+	<string>Youra connects to your Oura ring over Bluetooth to read your health data on-device.</string>
 	<key>NSBluetoothPeripheralUsageDescription</key>
-	<string>StrictlyHealth connects to your Oura ring over Bluetooth to read your health data on-device.</string>
+	<string>Youra connects to your Oura ring over Bluetooth to read your health data on-device.</string>
 	<key>NSHealthShareUsageDescription</key>
-	<string>StrictlyHealth reads sleep, heart rate, HRV, steps, active energy, and workouts to combine your Apple Watch and Oura data on this iPhone.</string>
+	<string>Youra reads sleep, heart rate, HRV, steps, active energy, and workouts to combine your Apple Watch and Oura data on this iPhone.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Youra uses the microphone for short voice check-ins. Audio is transcribed on-device and is not saved or uploaded.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Youra transcribes English check-ins on-device when supported. If local transcription is unavailable, typing remains available.</string>
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>

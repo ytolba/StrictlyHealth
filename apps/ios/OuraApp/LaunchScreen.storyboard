@@ -18,23 +18,23 @@
                                 <rect key="frame" x="30" y="337" width="333" height="178"/>
                                 <subviews>
                                     <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" image="StrictlyHealthMark" translatesAutoresizingMaskIntoConstraints="NO" id="launch-mark">
-                                        <rect key="frame" x="102.5" y="0" width="128" height="128"/>
+                                <rect key="frame" x="118.5" y="0" width="96" height="96"/>
                                         <color key="tintColor" systemColor="systemTealColor"/>
                                         <constraints>
-                                            <constraint firstAttribute="width" constant="128" id="mark-width"/>
-                                            <constraint firstAttribute="height" constant="128" id="mark-height"/>
+                                            <constraint firstAttribute="width" constant="96" id="mark-width"/>
+                                            <constraint firstAttribute="height" constant="96" id="mark-height"/>
                                         </constraints>
                                     </imageView>
-                                    <label opaque="NO" userInteractionEnabled="NO" contentMode="left" text="StrictlyHealth" textAlignment="center" numberOfLines="0" adjustsFontForContentSizeCategory="YES" translatesAutoresizingMaskIntoConstraints="NO" id="launch-title">
+                                    <label opaque="NO" userInteractionEnabled="NO" contentMode="left" text="Youra" textAlignment="center" numberOfLines="0" adjustsFontForContentSizeCategory="YES" translatesAutoresizingMaskIntoConstraints="NO" id="launch-title">
                                         <rect key="frame" x="112" y="80" width="109" height="29"/>
-                                        <fontDescription key="fontDescription" style="UICTFontTextStyleTitle2"/>
-                                        <color key="textColor" systemColor="labelColor"/>
+                                        <fontDescription key="fontDescription" style="UICTFontTextStyleLargeTitle"/>
+                                        <color key="textColor" red="0.96" green="0.96" blue="0.93" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
                                     </label>
                                 </subviews>
                             </stackView>
                         </subviews>
                         <viewLayoutGuide key="safeArea" id="launch-safe"/>
-                        <color key="backgroundColor" systemColor="systemBackgroundColor"/>
+                        <color key="backgroundColor" red="0.075" green="0.086" blue="0.10" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
                         <constraints>
                             <constraint firstItem="launch-stack" firstAttribute="centerX" secondItem="launch-safe" secondAttribute="centerX" id="launch-center-x"/>
                             <constraint firstItem="launch-stack" firstAttribute="centerY" secondItem="launch-safe" secondAttribute="centerY" id="launch-center-y"/>
