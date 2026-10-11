@@ -39,6 +39,15 @@ The loading screen shows real progress, with retry and saved-data recovery.
 a night beginning October 8 and ending October 9 appears under October 9.
 See [sleep insights and formulas](docs/public/SLEEP.md).
 
+## Preview
+
+These product visuals show the Youra interface with synthetic sample values. They
+are illustrative mockups, not screenshots or records from a real person's account.
+
+![Youra Today dashboard with sample data](docs/images/youra-today-sample.png)
+
+![Youra sleep detail with sample data](docs/images/youra-sleep-sample.png)
+
 ## Compatibility
 
 Gen 3 Horizon authentication/sync has been confirmed on one physical ring in this
@@ -67,6 +76,6 @@ Based on [Open Health](https://github.com/Th0rgal/open_health) and
 reference, not copied frontend code or a bundled dependency.
 [Third-party notices](THIRD_PARTY_NOTICES.md) · [MIT license](LICENSE).
 
-The repository URL remains `ytolba/StrictlyHealth` for existing users. App identity
-is now Youra; upgrading does not require a reset, re-pairing, or a new bundle ID.
+The public repository is [ytolba/Youra-Health](https://github.com/ytolba/Youra-Health).
+App identity is now Youra; upgrading does not require a reset, re-pairing, or a new bundle ID.
 Youra is independent and is not affiliated with Oura or Apple.

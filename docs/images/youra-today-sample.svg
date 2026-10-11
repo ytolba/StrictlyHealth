@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1500" viewBox="0 0 1200 1500" role="img" aria-labelledby="title desc">
+  <title id="title">Youra Today dashboard, sample data</title>
+  <desc id="desc">Illustrative Youra sleep-first dashboard with synthetic sleep and activity readings.</desc>
+  <defs>
+    <linearGradient id="canvas" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#17191d"/><stop offset="1" stop-color="#0c0e11"/>
+    </linearGradient>
+    <linearGradient id="sleep" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#18364c"/><stop offset="1" stop-color="#16242d"/>
+    </linearGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="30"/></filter>
+  </defs>
+  <rect width="1200" height="1500" fill="url(#canvas)"/>
+  <circle cx="1000" cy="180" r="190" fill="#65c8f2" opacity=".09" filter="url(#shadow)"/>
+  <path d="M103 94l13 13v14m13-27-13 13" fill="none" stroke="#f3f1ea" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" opacity=".9"/><circle cx="116" cy="107" r="3.5" fill="#72cdf2"/>
+  <text x="150" y="116" fill="#f3f1ea" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="30" font-weight="650" letter-spacing="1">YOURA</text>
+  <text x="1096" y="114" text-anchor="end" fill="#afb3b8" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="21" letter-spacing="2">SAMPLE DATA</text>
+
+  <rect x="223" y="164" width="754" height="1190" rx="72" fill="#050607" stroke="#383c40" stroke-width="3"/>
+  <rect x="244" y="185" width="712" height="1148" rx="54" fill="#111316"/>
+  <rect x="478" y="202" width="244" height="35" rx="18" fill="#050607"/>
+  <text x="286" y="229" fill="#f0efe9" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="18" font-weight="600">9:41</text>
+  <g fill="#dedfdc"><rect x="854" y="214" width="7" height="13" rx="3"/><rect x="866" y="209" width="7" height="18" rx="3"/><rect x="878" y="204" width="7" height="23" rx="3"/><path d="M896 213q14-14 28 0l-14 16z"/><rect x="933" y="207" width="38" height="20" rx="6" fill="none" stroke="#dedfdc" stroke-width="2"/><rect x="972" y="213" width="4" height="8" rx="2"/><rect x="937" y="211" width="24" height="12" rx="3"/></g>
+  <text x="286" y="302" fill="#a9adb2" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="19">TUESDAY, JUNE 17</text>
+  <text x="286" y="359" fill="#f5f3ed" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="38" font-weight="600">Good morning</text>
+  <circle cx="897" cy="331" r="7" fill="#72cdf2"/><text x="916" y="339" fill="#d7d9d8" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="17">Ring connected</text>
+
+  <rect x="274" y="393" width="652" height="321" rx="28" fill="url(#sleep)" stroke="#29475b" stroke-width="1.5"/>
+  <text x="309" y="440" fill="#c4d0d5" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="18" letter-spacing="1.4">LAST NIGHT · OURA</text>
+  <text x="309" y="521" fill="#f5f3ed" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="67" font-weight="550">7h 42m</text>
+  <text x="310" y="557" fill="#b8c2c8" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="19">Sleep · 10:14 PM – 6:24 AM</text>
+  <line x1="309" y1="586" x2="891" y2="586" stroke="#355062" stroke-width="1"/>
+  <g font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif">
+    <text x="309" y="624" fill="#aebdc5" font-size="16">SLEEP SCORE</text><text x="309" y="675" fill="#f5f3ed" font-size="39" font-weight="550">84</text>
+    <text x="508" y="624" fill="#aebdc5" font-size="16">EFFICIENCY</text><text x="508" y="675" fill="#f5f3ed" font-size="39" font-weight="550">93%</text>
+    <text x="733" y="624" fill="#aebdc5" font-size="16">TIME IN BED</text><text x="733" y="675" fill="#f5f3ed" font-size="39" font-weight="550">8h 18m</text>
+  </g>
+  <path d="M855 426l9 9-9 9" fill="none" stroke="#b5c3ca" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <text x="286" y="779" fill="#f4f2ec" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="24" font-weight="600">Your day, at a glance</text>
+  <text x="915" y="779" text-anchor="end" fill="#77c9ef" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="17">See patterns  ›</text>
+  <rect x="274" y="807" width="315" height="196" rx="23" fill="#202226"/>
+  <rect x="604" y="807" width="322" height="196" rx="23" fill="#202226"/>
+  <g font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif">
+    <text x="307" y="854" fill="#abb0b5" font-size="16" letter-spacing=".8">ACTIVITY · APPLE HEALTH</text><text x="307" y="918" fill="#f1efe9" font-size="46" font-weight="550">8,432</text><text x="307" y="956" fill="#c4c6c6" font-size="19">steps so far</text>
+    <text x="638" y="854" fill="#abb0b5" font-size="16" letter-spacing=".8">RECOVERY · OURA</text><text x="638" y="918" fill="#f1efe9" font-size="46" font-weight="550">Balanced</text><text x="638" y="956" fill="#c4c6c6" font-size="19">within your usual range</text>
+  </g>
+  <text x="286" y="1062" fill="#f4f2ec" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="24" font-weight="600">One small insight</text>
+  <rect x="274" y="1087" width="652" height="145" rx="23" fill="#1d2023" stroke="#34383a"/>
+  <circle cx="315" cy="1134" r="15" fill="#203b49"/><path d="M309 1134h12m-6-6v12" stroke="#83d3f5" stroke-width="2" stroke-linecap="round"/>
+  <text x="346" y="1133" fill="#e9e8e2" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="19">Your sleep midpoint was close to your</text>
+  <text x="346" y="1164" fill="#e9e8e2" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="19">recent pattern. Explore your 7-night view.</text>
+  <text x="346" y="1203" fill="#9ca3a6" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="15">Personal trend · sample comparison</text>
+  <g transform="translate(274 1263)" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="14" fill="#a8adb1">
+    <path d="M42 0v22h-20" fill="none" stroke="#a8adb1" stroke-width="2"/><text x="0" y="45">Today</text>
+    <path d="M205 20v-20m0 12 13-8 13 7 13-15" fill="none" stroke="#a8adb1" stroke-width="2"/><text x="186" y="45">Trends</text>
+    <circle cx="372" cy="7" r="10" fill="none" stroke="#6dc9ef" stroke-width="3"/><text x="351" y="45" fill="#7ed3f5">Ring</text>
+    <circle cx="548" cy="7" r="10" fill="none" stroke="#a8adb1" stroke-width="2"/><path d="M548-7v4m0 20v4m-14-14h4m20 0h4m-23-10 3 3m12 14 3 3m0-20-3 3m-12 14-3 3" stroke="#a8adb1" stroke-width="2"/><text x="526" y="45">Settings</text>
+  </g>
+  <rect x="409" y="1318" width="228" height="6" rx="3" fill="#f2f1ed"/>
+
+  <rect x="432" y="1392" width="336" height="48" rx="24" fill="#20252a" stroke="#37424a"/>
+  <circle cx="505" cy="1416" r="5" fill="#71cdf2"/>
+  <text x="478" y="1423" fill="#e4e4de" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="16" letter-spacing="1.2">SYNTHETIC SAMPLE DATA</text>
+</svg>
